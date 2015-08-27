@@ -27,10 +27,11 @@ This document details the groupchat implementation, giving a high level overview
 
 <a name="Features" />
 ## Features
+* Join via Chat ID or direct invite
 * Private messages
 * Action messages (/me)
 * Both public and private groups
-* Permanence (a group cannot 'die' as long as at least one peer retains their group credentials)
+* Permanence (a group cannot 'die' as long as at least one peer retains their group credentials, which doesn't require being online all the time)
 * Persistence across client restarts
 * Ability to set peer limits
 * Moderation (kicking, banning, silencing)
@@ -51,7 +52,7 @@ There are four distinct roles which are hierarchical in nature (higher roles hav
 * **Founder** - The group's creator. May set all other peers roles to anything except founder. May also set the group password, toggle the privacy state, and set the peer limit.
 * **Moderator** - Promoted by the founder. May kick, ban and set the user and observer roles for peers below this role. May also set the topic.
 * **User** - Default non-founder role. May communicate with other peers normally.
-* **Observer** - Demoted by moderators and the founder. May observe the group and ignore peers; may not communicate with other peers or with the group.
+* **Observer** - Demoted by moderators and the founder. May observe the group and ignore peers; may (cannot?) not communicate with other peers or with the group.
 
 <a name="Group types" />
 ## Group types
@@ -59,7 +60,7 @@ Groups can have two types: private and public. The type can be set on creation, 
 
 <a name="Public" />
 ### Public
-Anyone may join the group using the Chat ID. If the group is public, information about peers inside the group, including their IP addresses and group public keys (but not their Tox ID's) is visible to anyone with access to a node storing their DHT announcement. See the [DHT Announcements](#DHT Announcements) section for details.
+Anyone may join the group using the Chat ID (or you can be invited by someone?). If the group is public, information about peers inside the group, including their IP addresses and group public keys (but not their Tox ID's) is visible to anyone with access to a node storing their DHT announcement. See the [DHT Announcements](#DHT Announcements) section for details.
 
 <a name="Private" />
 ### Private
