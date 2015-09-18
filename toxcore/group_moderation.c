@@ -60,8 +60,15 @@ int mod_list_unpack(GC_Chat *chat, const uint8_t *data, uint32_t length, uint32_
     for (i = 0; i < num_mods; ++i) {
         tmp_list[i] = malloc(sizeof(uint8_t) * GC_MOD_LIST_ENTRY_SIZE);
 
-        if (tmp_list[i] == NULL)
+        if (tmp_list[i] == NULL) {
+            uint16_t j;
+            for (j = 0; j < i; ++j)
+                free(tmp_list[j]);
+
+            free(tmp_list);
+
             return -1;
+        }
 
         memcpy(tmp_list[i], &data[i * GC_MOD_LIST_ENTRY_SIZE], GC_MOD_LIST_ENTRY_SIZE);
         unpacked_len += GC_MOD_LIST_ENTRY_SIZE;
