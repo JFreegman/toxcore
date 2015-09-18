@@ -220,10 +220,10 @@ int mod_list_add_entry(GC_Chat *chat, const uint8_t *mod_data)
 
     uint8_t **tmp_list = realloc(chat->moderation.mod_list, sizeof(uint8_t *) * (chat->moderation.num_mods + 1));
 
-    if (tmp_list == NULL) {
-        chat->moderation.num_mods = 0;
+    if (tmp_list == NULL)
         return -1;
-    }
+
+    chat->moderation.mod_list = tmp_list;
 
     tmp_list[chat->moderation.num_mods] = malloc(sizeof(uint8_t) * GC_MOD_LIST_ENTRY_SIZE);
 
@@ -231,7 +231,6 @@ int mod_list_add_entry(GC_Chat *chat, const uint8_t *mod_data)
         return -1;
 
     memcpy(tmp_list[chat->moderation.num_mods], mod_data, GC_MOD_LIST_ENTRY_SIZE);
-    chat->moderation.mod_list = tmp_list;
     ++chat->moderation.num_mods;
 
     return 0;
