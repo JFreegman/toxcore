@@ -4429,6 +4429,8 @@ static int peer_add(Messenger *m, int groupnumber, IP_Port *ipp, const uint8_t *
             return -1;
     }
 
+    chat->gcc = tmp_gcc;
+
     GC_Connection *tmp_gcc = realloc(chat->gcc, sizeof(GC_Connection) * (chat->numpeers + 1));
 
     if (tmp_gcc == NULL) {
@@ -4448,7 +4450,6 @@ static int peer_add(Messenger *m, int groupnumber, IP_Port *ipp, const uint8_t *
     memset(&tmp_group[peernumber], 0, sizeof(GC_GroupPeer));
     memset(&tmp_gcc[peernumber], 0, sizeof(GC_Connection));
 
-    chat->gcc = tmp_gcc;
     chat->group = tmp_group;
 
     GC_Connection *gconn = &chat->gcc[peernumber];
