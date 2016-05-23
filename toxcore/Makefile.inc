@@ -49,7 +49,9 @@ libtoxcore_la_SOURCES = ../toxcore/DHT.h \
                         ../toxcore/list.c \
                         ../toxcore/list.h \
                         ../toxcore/misc_tools.h \
-                        ../toxcore/tox_old_code.h
+                        ../toxcore/tox_old_code.h \
+                        ../toxcore/netprof.c \
+                        ../toxcore/netprof.h
 
 libtoxcore_la_CFLAGS =  -I$(top_srcdir) \
                         -I$(top_srcdir)/toxcore \

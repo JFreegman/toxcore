@@ -352,6 +352,10 @@ int sendpacket(Networking_Core *net, IP_Port ip_port, const uint8_t *data, uint1
 
     loglogdata("O=>", data, length, ip_port, res);
 
+#ifdef PACKET_STATS
+        netprof_record_packet(&net->packet_stats, data, length, 0);
+#endif
+
     return res;
 }
 
@@ -425,6 +429,10 @@ void networking_poll(Networking_Core *net)
 
     while (receivepacket(net->sock, &ip_port, data, &length) != -1) {
         if (length < 1) continue;
+
+#ifdef PACKET_STATS
+        netprof_record_packet(&net->packet_stats, data, length, 1);
+#endif
 
         if (!(net->packethandlers[data[0]].function)) {
             LOGGER_WARNING("[%02u] -- Packet has no handler", data[0]);
@@ -701,6 +709,10 @@ void kill_networking(Networking_Core *net)
 {
     if (!net)
         return;
+
+#ifdef PACKET_STATS
+    netprof_report_stats(&net->packet_stats);
+#endif
 
     if (net->family != 0) /* Socket not initialized */
         kill_sock(net->sock);

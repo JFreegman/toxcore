@@ -33,6 +33,7 @@ BUILD_TESTS="yes"
 BUILD_AV="yes"
 BUILD_TESTING="yes"
 
+PACKET_STATS="no"
 TOX_LOGGER="no"
 LOGGING_OUTNAM="libtoxcore.log"
 
@@ -78,6 +79,16 @@ AC_ARG_ENABLE([randombytes-stir],
             else
                 AC_DEFINE([USE_RANDOMBYTES_STIR], [1], [randombytes_stir() instead of sodium_init()])
             fi
+        fi
+    ]
+)
+
+AC_ARG_ENABLE([packet_stats],
+    [AC_HELP_STRING([--enable-packet_stats], [enable packet stats collection (default: auto)]) ],
+    [
+        if test "x$enableval" = "xyes"; then
+            PACKET_STATS="yes"
+            AC_DEFINE([PACKET_STATS], [], [If packet_stats enabled])
         fi
     ]
 )

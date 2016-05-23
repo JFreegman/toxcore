@@ -68,6 +68,10 @@ typedef short sa_family_t;
 #include <netdb.h>
 #include <unistd.h>
 
+#ifdef PACKET_STATS
+#include "netprof.h"
+#endif
+
 typedef int sock_t;
 
 #endif
@@ -304,6 +308,10 @@ typedef struct {
     uint16_t port;
     /* Our UDP socket. */
     sock_t sock;
+
+#ifdef PACKET_STATS
+    Packet_Stats packet_stats;
+#endif
 } Networking_Core;
 
 /* Run this before creating sockets.
