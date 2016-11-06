@@ -169,12 +169,16 @@ int packed_node_size(Family ip_family);
 
 /* Packs an IP_Port structure into data of max size length.
  *
+ * Packed_length is the offset of data currently packed.
+ *
  * Returns size of packed IP_Port data on success
  * Return -1 on failure.
  */
 int pack_ip_port(uint8_t *data, uint16_t length, const IP_Port *ip_port);
 
 /* Unpack IP_Port structure from data of max size length into ip_port.
+ *
+ * len_processed is the offset of data currently unpacked.
  *
  * Return size of unpacked ip_port on success.
  * Return -1 on failure.
@@ -424,6 +428,9 @@ bool dht_non_lan_connected(const DHT *dht);
 
 
 uint32_t addto_lists(DHT *dht, IP_Port ip_port, const uint8_t *public_key);
+
+/* Copies your own ip_port structure to dest. */
+int ipport_self_copy(const DHT *dht, IP_Port *dest);
 
 #ifdef __cplusplus
 }  // extern "C"
