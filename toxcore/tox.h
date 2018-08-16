@@ -1,26 +1,26 @@
-/* tox.h
- *
+/*
  * The Tox public API.
- *
- *  Copyright (C) 2013 Tox project All Rights Reserved.
- *
- *  This file is part of Tox.
- *
- *  Tox is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  Tox is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with Tox.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
+/*
+ * Copyright © 2016-2017 The TokTok team.
+ * Copyright © 2013 Tox project.
+ *
+ * This file is part of Tox, the free peer to peer instant messenger.
+ *
+ * Tox is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Tox is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef TOX_H
 #define TOX_H
 
@@ -35,13 +35,14 @@ extern "C" {
 
 /*******************************************************************************
  * `tox.h` SHOULD *NOT* BE EDITED MANUALLY – any changes should be made to   *
- * `tox.in.h`, located in `other/apidsl/`. For instructions on how to        *
- * generate `tox.h` from `tox.in.h` please refer to `other/apidsl/README.md` *
+ * `tox.api.h`, located in `toxcore/`. For instructions on how to            *
+ * generate `tox.h` from `tox.api.h` please refer to `docs/apidsl.md`        *
  ******************************************************************************/
 
 
 
-/** \page core Public core API for Tox clients.
+/**
+ * @page core Public core API for Tox clients.
  *
  * Every function that can fail takes a function-specific error code pointer
  * that can be used to diagnose problems with the Tox state or the function
@@ -75,8 +76,12 @@ extern "C" {
  * enumeration value is outside the valid range of the type. If possible, the
  * function will try to use a sane default, but there will be no error code,
  * and one possible action for the function to take is to have no effect.
+ *
+ * Integer constants and the memory layout of publicly exposed structs are not
+ * part of the ABI.
  */
-/** \subsection events Events and callbacks
+/**
+ * @subsection events Events and callbacks
  *
  * Events are handled by callbacks. One callback can be registered per event.
  * All events have a callback function type named `tox_{event}_cb` and a
@@ -84,8 +89,22 @@ extern "C" {
  * callback will result in no callback being registered for that event. Only
  * one callback per event can be registered, so if a client needs multiple
  * event listeners, it needs to implement the dispatch functionality itself.
+ *
+ * The last argument to a callback is the user data pointer. It is passed from
+ * tox_iterate to each callback in sequence.
+ *
+ * The user data pointer is never stored or dereferenced by any library code, so
+ * can be any pointer, including NULL. Callbacks must all operate on the same
+ * object type. In the apidsl code (tox.in.h), this is denoted with `any`. The
+ * `any` in tox_iterate must be the same `any` as in all callbacks. In C,
+ * lacking parametric polymorphism, this is a pointer to void.
+ *
+ * Old style callbacks that are registered together with a user data pointer
+ * receive that pointer as argument when they are called. They can each have
+ * their own user data pointer of their own type.
  */
-/** \subsection threading Threading implications
+/**
+ * @subsection threading Threading implications
  *
  * It is possible to run multiple concurrent threads with a Tox instance for
  * each thread. It is also possible to run all Tox instances in the same thread.
@@ -107,12 +126,12 @@ extern "C" {
  *
  * E.g. to get the current nickname, one would write
  *
- * \code
+ * @code
  * size_t length = tox_self_get_name_size(tox);
  * uint8_t *name = malloc(length);
  * if (!name) abort();
  * tox_self_get_name(tox, name);
- * \endcode
+ * @endcode
  *
  * If any other thread calls tox_self_set_name while this thread is allocating
  * memory, the length may have become invalid, and the call to
@@ -142,55 +161,52 @@ typedef struct Tox Tox;
 /**
  * The major version number. Incremented when the API or ABI changes in an
  * incompatible way.
+ *
+ * The function variants of these constants return the version number of the
+ * library. They can be used to display the Tox library version or to check
+ * whether the client is compatible with the dynamically linked version of Tox.
  */
-#define TOX_VERSION_MAJOR               0u
+#define TOX_VERSION_MAJOR              0
+
+uint32_t tox_version_major(void);
 
 /**
  * The minor version number. Incremented when functionality is added without
  * breaking the API or ABI. Set to 0 when the major version number is
  * incremented.
  */
-#define TOX_VERSION_MINOR               0u
+#define TOX_VERSION_MINOR              2
+
+uint32_t tox_version_minor(void);
 
 /**
  * The patch or revision number. Incremented when bugfixes are applied without
  * changing any functionality or API or ABI.
  */
-#define TOX_VERSION_PATCH               0u
+#define TOX_VERSION_PATCH              5
+
+uint32_t tox_version_patch(void);
 
 /**
  * A macro to check at preprocessing time whether the client code is compatible
- * with the installed version of Tox.
+ * with the installed version of Tox. Leading zeros in the version number are
+ * ignored. E.g. 0.1.5 is to 0.1.4 what 1.5 is to 1.4, that is: it can add new
+ * features, but can't break the API.
  */
-#define TOX_VERSION_IS_API_COMPATIBLE(MAJOR, MINOR, PATCH)      \
-  (TOX_VERSION_MAJOR == MAJOR &&                                \
-   (TOX_VERSION_MINOR > MINOR ||                                \
-    (TOX_VERSION_MINOR == MINOR &&                              \
-     TOX_VERSION_PATCH >= PATCH)))
-
-/**
- * A macro to make compilation fail if the client code is not compatible with
- * the installed version of Tox.
- */
-#define TOX_VERSION_REQUIRE(MAJOR, MINOR, PATCH)                \
-  typedef char tox_required_version[TOX_IS_COMPATIBLE(MAJOR, MINOR, PATCH) ? 1 : -1]
-
-/**
- * Return the major version number of the library. Can be used to display the
- * Tox library version or to check whether the client is compatible with the
- * dynamically linked version of Tox.
- */
-uint32_t tox_version_major(void);
-
-/**
- * Return the minor version number of the library.
- */
-uint32_t tox_version_minor(void);
-
-/**
- * Return the patch number of the library.
- */
-uint32_t tox_version_patch(void);
+#define TOX_VERSION_IS_API_COMPATIBLE(MAJOR, MINOR, PATCH)              \
+  ((TOX_VERSION_MAJOR > 0 && TOX_VERSION_MAJOR == MAJOR) && (           \
+    /* 1.x.x, 2.x.x, etc. with matching major version. */               \
+    TOX_VERSION_MINOR > MINOR ||                                        \
+    (TOX_VERSION_MINOR == MINOR && TOX_VERSION_PATCH >= PATCH)          \
+  )) || ((TOX_VERSION_MAJOR == 0 && MAJOR == 0) && (                    \
+    /* 0.x.x makes minor behave like major above. */                    \
+    ((TOX_VERSION_MINOR > 0 && TOX_VERSION_MINOR == MINOR) && (         \
+      TOX_VERSION_PATCH >= PATCH                                        \
+    )) || ((TOX_VERSION_MINOR == 0 && MINOR == 0) && (                  \
+      /* 0.0.x and 0.0.y are only compatible if x == y. */              \
+      TOX_VERSION_PATCH == PATCH                                        \
+    ))                                                                  \
+  ))
 
 /**
  * Return whether the compiled library version is compatible with the passed
@@ -210,6 +226,10 @@ bool tox_version_is_compatible(uint32_t major, uint32_t minor, uint32_t patch);
  *
  * :: Numeric constants
  *
+ * The values of these are not part of the ABI. Prefer to use the function
+ * versions of them for code that should remain compatible with future versions
+ * of toxcore.
+ *
  ******************************************************************************/
 
 
@@ -219,10 +239,37 @@ bool tox_version_is_compatible(uint32_t major, uint32_t minor, uint32_t patch);
  */
 #define TOX_PUBLIC_KEY_SIZE            32
 
+uint32_t tox_public_key_size(void);
+
 /**
  * The size of a Tox Secret Key in bytes.
  */
 #define TOX_SECRET_KEY_SIZE            32
+
+uint32_t tox_secret_key_size(void);
+
+/**
+ * The size of a Tox Conference unique id in bytes.
+ *
+ * @deprecated Use TOX_CONFERENCE_ID_SIZE instead.
+ */
+#define TOX_CONFERENCE_UID_SIZE        32
+
+uint32_t tox_conference_uid_size(void);
+
+/**
+ * The size of a Tox Conference unique id in bytes.
+ */
+#define TOX_CONFERENCE_ID_SIZE         32
+
+uint32_t tox_conference_id_size(void);
+
+/**
+ * The size of the nospam in bytes when written in a Tox address.
+ */
+#define TOX_NOSPAM_SIZE                (sizeof(uint32_t))
+
+uint32_t tox_nospam_size(void);
 
 /**
  * The size of a Tox address in bytes. Tox addresses are in the format
@@ -232,47 +279,89 @@ bool tox_version_is_compatible(uint32_t major, uint32_t minor, uint32_t patch);
  * byte is an XOR of all the even bytes (0, 2, 4, ...), the second byte is an
  * XOR of all the odd bytes (1, 3, 5, ...) of the Public Key and nospam.
  */
-#define TOX_ADDRESS_SIZE               (TOX_PUBLIC_KEY_SIZE + sizeof(uint32_t) + sizeof(uint16_t))
+#define TOX_ADDRESS_SIZE               (TOX_PUBLIC_KEY_SIZE + TOX_NOSPAM_SIZE + sizeof(uint16_t))
+
+uint32_t tox_address_size(void);
 
 /**
  * Maximum length of a nickname in bytes.
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
 #define TOX_MAX_NAME_LENGTH            128
 
+uint32_t tox_max_name_length(void);
+
 /**
  * Maximum length of a status message in bytes.
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
 #define TOX_MAX_STATUS_MESSAGE_LENGTH  1007
 
+uint32_t tox_max_status_message_length(void);
+
 /**
  * Maximum length of a friend request message in bytes.
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
 #define TOX_MAX_FRIEND_REQUEST_LENGTH  1016
 
+uint32_t tox_max_friend_request_length(void);
+
 /**
  * Maximum length of a single message after which it should be split.
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
 #define TOX_MAX_MESSAGE_LENGTH         1372
 
+uint32_t tox_max_message_length(void);
+
 /**
- * Maximum size of custom packets. TODO: should be LENGTH?
+ * Maximum size of custom packets. TODO(iphydf): should be LENGTH?
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
 #define TOX_MAX_CUSTOM_PACKET_SIZE     1373
+
+uint32_t tox_max_custom_packet_size(void);
 
 /**
  * The number of bytes in a hash generated by tox_hash.
  */
 #define TOX_HASH_LENGTH                32
 
+uint32_t tox_hash_length(void);
+
 /**
  * The number of bytes in a file id.
  */
 #define TOX_FILE_ID_LENGTH             32
 
+uint32_t tox_file_id_length(void);
+
 /**
  * Maximum file name length for file transfers.
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
 #define TOX_MAX_FILENAME_LENGTH        255
+
+uint32_t tox_max_filename_length(void);
+
+/**
+ * Maximum length of a hostname, e.g. proxy or bootstrap node names.
+ *
+ * This length does not include the NUL byte. Hostnames are NUL-terminated C
+ * strings, so they are 255 characters plus one NUL byte.
+ *
+ * @deprecated The macro will be removed in 0.3.0. Use the function instead.
+ */
+#define TOX_MAX_HOSTNAME_LENGTH        255
+
+uint32_t tox_max_hostname_length(void);
 
 
 /*******************************************************************************
@@ -285,6 +374,9 @@ bool tox_version_is_compatible(uint32_t major, uint32_t minor, uint32_t patch);
 
 /**
  * Represents the possible statuses a client can have.
+ *
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
  */
 typedef enum TOX_USER_STATUS {
 
@@ -309,8 +401,11 @@ typedef enum TOX_USER_STATUS {
 
 
 /**
- * Represents message types for tox_friend_send_message and group chat
+ * Represents message types for tox_friend_send_message and conference
  * messages.
+ *
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
  */
 typedef enum TOX_MESSAGE_TYPE {
 
@@ -339,6 +434,9 @@ typedef enum TOX_MESSAGE_TYPE {
 
 /**
  * Type of proxy used to connect to TCP relays.
+ *
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
  */
 typedef enum TOX_PROXY_TYPE {
 
@@ -362,6 +460,9 @@ typedef enum TOX_PROXY_TYPE {
 
 /**
  * Type of savedata to create the Tox instance from.
+ *
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
  */
 typedef enum TOX_SAVEDATA_TYPE {
 
@@ -371,12 +472,12 @@ typedef enum TOX_SAVEDATA_TYPE {
     TOX_SAVEDATA_TYPE_NONE,
 
     /**
-     * Savedata is one that was obtained from tox_get_savedata
+     * Savedata is one that was obtained from tox_get_savedata.
      */
     TOX_SAVEDATA_TYPE_TOX_SAVE,
 
     /**
-     * Savedata is a secret key of length TOX_SECRET_KEY_SIZE
+     * Savedata is a secret key of length TOX_SECRET_KEY_SIZE.
      */
     TOX_SAVEDATA_TYPE_SECRET_KEY,
 
@@ -384,9 +485,74 @@ typedef enum TOX_SAVEDATA_TYPE {
 
 
 /**
- * This struct contains all the startup options for Tox. You can either allocate
- * this object yourself, and pass it to tox_options_default, or call
- * tox_options_new to get a new default options object.
+ * Severity level of log messages.
+ *
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
+ */
+typedef enum TOX_LOG_LEVEL {
+
+    /**
+     * Very detailed traces including all network activity.
+     */
+    TOX_LOG_LEVEL_TRACE,
+
+    /**
+     * Debug messages such as which port we bind to.
+     */
+    TOX_LOG_LEVEL_DEBUG,
+
+    /**
+     * Informational log messages such as video call status changes.
+     */
+    TOX_LOG_LEVEL_INFO,
+
+    /**
+     * Warnings about internal inconsistency or logic errors.
+     */
+    TOX_LOG_LEVEL_WARNING,
+
+    /**
+     * Severe unexpected errors caused by external or internal inconsistency.
+     */
+    TOX_LOG_LEVEL_ERROR,
+
+} TOX_LOG_LEVEL;
+
+
+/**
+ * This event is triggered when the toxcore library logs an internal message.
+ * This is mostly useful for debugging. This callback can be called from any
+ * function, not just tox_iterate. This means the user data lifetime must at
+ * least extend between registering and unregistering it or tox_kill.
+ *
+ * Other toxcore modules such as toxav may concurrently call this callback at
+ * any time. Thus, user code must make sure it is equipped to handle concurrent
+ * execution, e.g. by employing appropriate mutex locking.
+ *
+ * @param level The severity of the log message.
+ * @param file The source file from which the message originated.
+ * @param line The source line from which the message originated.
+ * @param func The function from which the message originated.
+ * @param message The log message.
+ * @param user_data The user data pointer passed to tox_new in options.
+ */
+typedef void tox_log_cb(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func,
+                        const char *message, void *user_data);
+
+
+/**
+ * This struct contains all the startup options for Tox. You must tox_options_new to
+ * allocate an object of this type.
+ *
+ * WARNING: Although this struct happens to be visible in the API, it is
+ * effectively private. Do not allocate this yourself or access members
+ * directly, as it *will* break binary compatibility frequently.
+ *
+ * @deprecated The memory layout of this struct (size, alignment, and field
+ * order) is not part of the ABI. To remain compatible, prefer to use tox_options_new to
+ * allocate the object and accessor functions to set the members. The struct
+ * will become opaque (i.e. the definition will become private) in v0.3.0.
  */
 struct Tox_Options {
 
@@ -406,9 +572,19 @@ struct Tox_Options {
      *
      * Setting this to false will force Tox to use TCP only. Communications will
      * need to be relayed through a TCP relay node, potentially slowing them down.
-     * Disabling UDP support is necessary when using anonymous proxies or Tor.
+     *
+     * If a proxy is enabled, UDP will be disabled if either toxcore or the
+     * proxy don't support proxying UDP messages.
      */
     bool udp_enabled;
+
+
+    /**
+     * Enable local network peer discovery.
+     *
+     * Disabling this will cause Tox to not look for peers on the local network.
+     */
+    bool local_discovery_enabled;
 
 
     /**
@@ -421,10 +597,13 @@ struct Tox_Options {
      * The IP address or DNS name of the proxy to be used.
      *
      * If used, this must be non-NULL and be a valid DNS name. The name must not
-     * exceed 255 characters, and be in a NUL-terminated C string format
-     * (255 chars + 1 NUL byte).
+     * exceed TOX_MAX_HOSTNAME_LENGTH characters, and be in a NUL-terminated C string
+     * format (TOX_MAX_HOSTNAME_LENGTH includes the NUL byte).
      *
      * This member is ignored (it can be NULL) if proxy_type is TOX_PROXY_TYPE_NONE.
+     *
+     * The data pointed at by this member is owned by the user, so must
+     * outlive the options object.
      */
     const char *proxy_host;
 
@@ -474,6 +653,12 @@ struct Tox_Options {
 
 
     /**
+     * Enables or disables UDP hole-punching in toxcore. (Default: enabled).
+     */
+    bool hole_punching_enabled;
+
+
+    /**
      * The type of savedata to load from.
      */
     TOX_SAVEDATA_TYPE savedata_type;
@@ -481,6 +666,9 @@ struct Tox_Options {
 
     /**
      * The savedata.
+     *
+     * The data pointed at by this member is owned by the user, so must
+     * outlive the options object.
      */
     const uint8_t *savedata_data;
 
@@ -490,8 +678,80 @@ struct Tox_Options {
      */
     size_t savedata_length;
 
+
+    /**
+     * Logging callback for the new tox instance.
+     */
+    tox_log_cb *log_callback;
+
+
+    /**
+     * User data pointer passed to the logging callback.
+     */
+    void *log_user_data;
+
 };
 
+
+bool tox_options_get_ipv6_enabled(const struct Tox_Options *options);
+
+void tox_options_set_ipv6_enabled(struct Tox_Options *options, bool ipv6_enabled);
+
+bool tox_options_get_udp_enabled(const struct Tox_Options *options);
+
+void tox_options_set_udp_enabled(struct Tox_Options *options, bool udp_enabled);
+
+bool tox_options_get_local_discovery_enabled(const struct Tox_Options *options);
+
+void tox_options_set_local_discovery_enabled(struct Tox_Options *options, bool local_discovery_enabled);
+
+TOX_PROXY_TYPE tox_options_get_proxy_type(const struct Tox_Options *options);
+
+void tox_options_set_proxy_type(struct Tox_Options *options, TOX_PROXY_TYPE type);
+
+const char *tox_options_get_proxy_host(const struct Tox_Options *options);
+
+void tox_options_set_proxy_host(struct Tox_Options *options, const char *host);
+
+uint16_t tox_options_get_proxy_port(const struct Tox_Options *options);
+
+void tox_options_set_proxy_port(struct Tox_Options *options, uint16_t port);
+
+uint16_t tox_options_get_start_port(const struct Tox_Options *options);
+
+void tox_options_set_start_port(struct Tox_Options *options, uint16_t start_port);
+
+uint16_t tox_options_get_end_port(const struct Tox_Options *options);
+
+void tox_options_set_end_port(struct Tox_Options *options, uint16_t end_port);
+
+uint16_t tox_options_get_tcp_port(const struct Tox_Options *options);
+
+void tox_options_set_tcp_port(struct Tox_Options *options, uint16_t tcp_port);
+
+bool tox_options_get_hole_punching_enabled(const struct Tox_Options *options);
+
+void tox_options_set_hole_punching_enabled(struct Tox_Options *options, bool hole_punching_enabled);
+
+TOX_SAVEDATA_TYPE tox_options_get_savedata_type(const struct Tox_Options *options);
+
+void tox_options_set_savedata_type(struct Tox_Options *options, TOX_SAVEDATA_TYPE type);
+
+const uint8_t *tox_options_get_savedata_data(const struct Tox_Options *options);
+
+void tox_options_set_savedata_data(struct Tox_Options *options, const uint8_t *data, size_t length);
+
+size_t tox_options_get_savedata_length(const struct Tox_Options *options);
+
+void tox_options_set_savedata_length(struct Tox_Options *options, size_t length);
+
+tox_log_cb *tox_options_get_log_callback(const struct Tox_Options *options);
+
+void tox_options_set_log_callback(struct Tox_Options *options, tox_log_cb *callback);
+
+void *tox_options_get_log_user_data(const struct Tox_Options *options);
+
+void tox_options_set_log_user_data(struct Tox_Options *options, void *user_data);
 
 /**
  * Initialises a Tox_Options object with the default options.
@@ -651,8 +911,8 @@ size_t tox_get_savedata_size(const Tox *tox);
 /**
  * Store all information associated with the tox instance to a byte array.
  *
- * @param data A memory region large enough to store the tox instance data.
- *   Call tox_get_savedata_size to find the number of bytes required. If this parameter
+ * @param savedata A memory region large enough to store the tox instance
+ *   data. Call tox_get_savedata_size to find the number of bytes required. If this parameter
  *   is NULL, this function has no effect.
  */
 void tox_get_savedata(const Tox *tox, uint8_t *savedata);
@@ -679,7 +939,7 @@ typedef enum TOX_ERR_BOOTSTRAP {
     TOX_ERR_BOOTSTRAP_NULL,
 
     /**
-     * The address could not be resolved to an IP address, or the IP address
+     * The hostname could not be resolved to an IP address, or the IP address
      * passed was invalid.
      */
     TOX_ERR_BOOTSTRAP_BAD_HOST,
@@ -699,14 +959,15 @@ typedef enum TOX_ERR_BOOTSTRAP {
  * This function will attempt to connect to the node using UDP. You must use
  * this function even if Tox_Options.udp_enabled was set to false.
  *
- * @param address The hostname or IP address (IPv4 or IPv6) of the node.
+ * @param host The hostname or IP address (IPv4 or IPv6) of the node. Must be
+ *   at most TOX_MAX_HOSTNAME_LENGTH chars, including the NUL byte.
  * @param port The port on the host on which the bootstrap Tox instance is
  *   listening.
  * @param public_key The long term public key of the bootstrap node
  *   (TOX_PUBLIC_KEY_SIZE bytes).
  * @return true on success.
  */
-bool tox_bootstrap(Tox *tox, const char *address, uint16_t port, const uint8_t *public_key, TOX_ERR_BOOTSTRAP *error);
+bool tox_bootstrap(Tox *tox, const char *host, uint16_t port, const uint8_t *public_key, TOX_ERR_BOOTSTRAP *error);
 
 /**
  * Adds additional host:port pair as TCP relay.
@@ -715,17 +976,20 @@ bool tox_bootstrap(Tox *tox, const char *address, uint16_t port, const uint8_t *
  * the same bootstrap node, or to add TCP relays without using them as
  * bootstrap nodes.
  *
- * @param address The hostname or IP address (IPv4 or IPv6) of the TCP relay.
+ * @param host The hostname or IP address (IPv4 or IPv6) of the TCP relay.
+ *   Must be at most TOX_MAX_HOSTNAME_LENGTH chars, including the NUL byte.
  * @param port The port on the host on which the TCP relay is listening.
  * @param public_key The long term public key of the TCP relay
  *   (TOX_PUBLIC_KEY_SIZE bytes).
  * @return true on success.
  */
-bool tox_add_tcp_relay(Tox *tox, const char *address, uint16_t port, const uint8_t *public_key,
-                       TOX_ERR_BOOTSTRAP *error);
+bool tox_add_tcp_relay(Tox *tox, const char *host, uint16_t port, const uint8_t *public_key, TOX_ERR_BOOTSTRAP *error);
 
 /**
  * Protocols that can be used to connect to the network or friends.
+ *
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
  */
 typedef enum TOX_CONNECTION {
 
@@ -756,6 +1020,9 @@ typedef enum TOX_CONNECTION {
 /**
  * Return whether we are connected to the DHT. The return value is equal to the
  * last value received through the `self_connection_status` callback.
+ *
+ * @deprecated This getter is deprecated. Use the event and store the status
+ * in the client state.
  */
 TOX_CONNECTION tox_self_get_connection_status(const Tox *tox);
 
@@ -774,9 +1041,9 @@ typedef void tox_self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_s
  * amounts of time. Clients should therefore not immediately bootstrap on
  * receiving a disconnect.
  *
- * TODO: how long should a client wait before bootstrapping again?
+ * TODO(iphydf): how long should a client wait before bootstrapping again?
  */
-void tox_callback_self_connection_status(Tox *tox, tox_self_connection_status_cb *callback, void *user_data);
+void tox_callback_self_connection_status(Tox *tox, tox_self_connection_status_cb *callback);
 
 /**
  * Return the time in milliseconds before tox_iterate() should be called again
@@ -788,7 +1055,7 @@ uint32_t tox_iteration_interval(const Tox *tox);
  * The main loop that needs to be run in intervals of tox_iteration_interval()
  * milliseconds.
  */
-void tox_iterate(Tox *tox);
+void tox_iterate(Tox *tox, void *user_data);
 
 
 /*******************************************************************************
@@ -811,14 +1078,17 @@ void tox_iterate(Tox *tox);
 void tox_self_get_address(const Tox *tox, uint8_t *address);
 
 /**
- * Set the 4-byte nospam part of the address.
+ * Set the 4-byte nospam part of the address. This value is expected in host
+ * byte order. I.e. 0x12345678 will form the bytes [12, 34, 56, 78] in the
+ * nospam part of the Tox friend address.
  *
  * @param nospam Any 32 bit unsigned integer.
  */
 void tox_self_set_nospam(Tox *tox, uint32_t nospam);
 
 /**
- * Get the 4-byte nospam part of the address.
+ * Get the 4-byte nospam part of the address. This value is returned in host
+ * byte order.
  */
 uint32_t tox_self_get_nospam(const Tox *tox);
 
@@ -936,15 +1206,15 @@ size_t tox_self_get_status_message_size(const Tox *tox);
  * Call tox_self_get_status_message_size to find out how much memory to allocate for
  * the result.
  *
- * @param status A valid memory location large enough to hold the status message.
- *   If this parameter is NULL, the function has no effect.
+ * @param status_message A valid memory location large enough to hold the
+ *   status message. If this parameter is NULL, the function has no effect.
  */
 void tox_self_get_status_message(const Tox *tox, uint8_t *status_message);
 
 /**
  * Set the client's user status.
  *
- * @param user_status One of the user statuses listed in the enumeration above.
+ * @param status One of the user statuses listed in the enumeration above.
  */
 void tox_self_set_status(Tox *tox, TOX_USER_STATUS status);
 
@@ -1036,7 +1306,7 @@ typedef enum TOX_ERR_FRIEND_ADD {
  * @param message The message that will be sent along with the friend request.
  * @param length The length of the data byte array.
  *
- * @return the friend number on success, UINT32_MAX on failure.
+ * @return the friend number on success, an unspecified value on failure.
  */
 uint32_t tox_friend_add(Tox *tox, const uint8_t *address, const uint8_t *message, size_t length,
                         TOX_ERR_FRIEND_ADD *error);
@@ -1056,7 +1326,7 @@ uint32_t tox_friend_add(Tox *tox, const uint8_t *address, const uint8_t *message
  * @param public_key A byte array of length TOX_PUBLIC_KEY_SIZE containing the
  *   Public Key (not the Address) of the friend to add.
  *
- * @return the friend number on success, UINT32_MAX on failure.
+ * @return the friend number on success, an unspecified value on failure.
  * @see tox_friend_add for a more detailed description of friend numbers.
  */
 uint32_t tox_friend_add_norequest(Tox *tox, const uint8_t *public_key, TOX_ERR_FRIEND_ADD *error);
@@ -1121,7 +1391,7 @@ typedef enum TOX_ERR_FRIEND_BY_PUBLIC_KEY {
 /**
  * Return the friend number associated with that Public Key.
  *
- * @return the friend number on success, UINT32_MAX on failure.
+ * @return the friend number on success, an unspecified value on failure.
  * @param public_key A byte array containing the Public Key.
  */
 uint32_t tox_friend_by_public_key(const Tox *tox, const uint8_t *public_key, TOX_ERR_FRIEND_BY_PUBLIC_KEY *error);
@@ -1145,8 +1415,8 @@ size_t tox_self_get_friend_list_size(const Tox *tox);
  *
  * Call tox_self_get_friend_list_size to determine the number of elements to allocate.
  *
- * @param list A memory region with enough space to hold the friend list. If
- *   this parameter is NULL, this function has no effect.
+ * @param friend_list A memory region with enough space to hold the friend
+ *   list. If this parameter is NULL, this function has no effect.
  */
 void tox_self_get_friend_list(const Tox *tox, uint32_t *friend_list);
 
@@ -1274,7 +1544,7 @@ typedef void tox_friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t 
  *
  * This event is triggered when a friend changes their name.
  */
-void tox_callback_friend_name(Tox *tox, tox_friend_name_cb *callback, void *user_data);
+void tox_callback_friend_name(Tox *tox, tox_friend_name_cb *callback);
 
 /**
  * Return the length of the friend's status message. If the friend number is
@@ -1314,7 +1584,7 @@ typedef void tox_friend_status_message_cb(Tox *tox, uint32_t friend_number, cons
  *
  * This event is triggered when a friend changes their status message.
  */
-void tox_callback_friend_status_message(Tox *tox, tox_friend_status_message_cb *callback, void *user_data);
+void tox_callback_friend_status_message(Tox *tox, tox_friend_status_message_cb *callback);
 
 /**
  * Return the friend's user status (away/busy/...). If the friend number is
@@ -1322,6 +1592,9 @@ void tox_callback_friend_status_message(Tox *tox, tox_friend_status_message_cb *
  *
  * The status returned is equal to the last status received through the
  * `friend_status` callback.
+ *
+ * @deprecated This getter is deprecated. Use the event and store the status
+ *   in the client state.
  */
 TOX_USER_STATUS tox_friend_get_status(const Tox *tox, uint32_t friend_number, TOX_ERR_FRIEND_QUERY *error);
 
@@ -1338,7 +1611,7 @@ typedef void tox_friend_status_cb(Tox *tox, uint32_t friend_number, TOX_USER_STA
  *
  * This event is triggered when a friend changes their user status.
  */
-void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback, void *user_data);
+void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback);
 
 /**
  * Check whether a friend is currently connected to this client.
@@ -1351,6 +1624,9 @@ void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback, void *
  *
  * @return the friend's connection status as it was received through the
  *   `friend_connection_status` event.
+ *
+ * @deprecated This getter is deprecated. Use the event and store the status
+ *   in the client state.
  */
 TOX_CONNECTION tox_friend_get_connection_status(const Tox *tox, uint32_t friend_number, TOX_ERR_FRIEND_QUERY *error);
 
@@ -1373,7 +1649,7 @@ typedef void tox_friend_connection_status_cb(Tox *tox, uint32_t friend_number, T
  * This callback is not called when adding friends. It is assumed that when
  * adding friends, their connection status is initially offline.
  */
-void tox_callback_friend_connection_status(Tox *tox, tox_friend_connection_status_cb *callback, void *user_data);
+void tox_callback_friend_connection_status(Tox *tox, tox_friend_connection_status_cb *callback);
 
 /**
  * Check whether a friend is currently typing a message.
@@ -1383,6 +1659,9 @@ void tox_callback_friend_connection_status(Tox *tox, tox_friend_connection_statu
  * @return true if the friend is typing.
  * @return false if the friend is not typing, or the friend number was
  *   invalid. Inspect the error code to determine which case it is.
+ *
+ * @deprecated This getter is deprecated. Use the event and store the status
+ *   in the client state.
  */
 bool tox_friend_get_typing(const Tox *tox, uint32_t friend_number, TOX_ERR_FRIEND_QUERY *error);
 
@@ -1400,7 +1679,7 @@ typedef void tox_friend_typing_cb(Tox *tox, uint32_t friend_number, bool is_typi
  *
  * This event is triggered when a friend starts or stops typing.
  */
-void tox_callback_friend_typing(Tox *tox, tox_friend_typing_cb *callback, void *user_data);
+void tox_callback_friend_typing(Tox *tox, tox_friend_typing_cb *callback);
 
 
 /*******************************************************************************
@@ -1518,7 +1797,7 @@ typedef void tox_friend_read_receipt_cb(Tox *tox, uint32_t friend_number, uint32
  * This event is triggered when the friend receives the message sent with
  * tox_friend_send_message with the corresponding message ID.
  */
-void tox_callback_friend_read_receipt(Tox *tox, tox_friend_read_receipt_cb *callback, void *user_data);
+void tox_callback_friend_read_receipt(Tox *tox, tox_friend_read_receipt_cb *callback);
 
 
 /*******************************************************************************
@@ -1531,11 +1810,6 @@ void tox_callback_friend_read_receipt(Tox *tox, tox_friend_read_receipt_cb *call
 
 /**
  * @param public_key The Public Key of the user who sent the friend request.
- * @param time_delta A delta in seconds between when the message was composed
- *   and when it is being transmitted. For messages that are sent immediately,
- *   it will be 0. If a message was written and couldn't be sent immediately
- *   (due to a connection failure, for example), the time_delta is an
- *   approximation of when it was composed.
  * @param message The message they sent along with the request.
  * @param length The size of the message byte array.
  */
@@ -1548,15 +1822,12 @@ typedef void tox_friend_request_cb(Tox *tox, const uint8_t *public_key, const ui
  *
  * This event is triggered when a friend request is received.
  */
-void tox_callback_friend_request(Tox *tox, tox_friend_request_cb *callback, void *user_data);
+void tox_callback_friend_request(Tox *tox, tox_friend_request_cb *callback);
 
 /**
  * @param friend_number The friend number of the friend who sent the message.
- * @param time_delta Time between composition and sending.
  * @param message The message data they sent.
  * @param length The size of the message byte array.
- *
- * @see friend_request for more information on time_delta.
  */
 typedef void tox_friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message,
                                    size_t length, void *user_data);
@@ -1567,7 +1838,7 @@ typedef void tox_friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE
  *
  * This event is triggered when a message from a friend is received.
  */
-void tox_callback_friend_message(Tox *tox, tox_friend_message_cb *callback, void *user_data);
+void tox_callback_friend_message(Tox *tox, tox_friend_message_cb *callback);
 
 
 /*******************************************************************************
@@ -1599,6 +1870,14 @@ void tox_callback_friend_message(Tox *tox, tox_friend_message_cb *callback, void
  */
 bool tox_hash(uint8_t *hash, const uint8_t *data, size_t length);
 
+/**
+ * A list of pre-defined file kinds. Toxcore itself does not behave
+ * differently for different file kinds. These are a hint to the client
+ * telling it what use the sender intended for the file. The `kind` parameter
+ * in the send function and recv callback are `uint32_t`, not TOX_FILE_KIND, because
+ * clients can invent their own file kind. Unknown file kinds should be
+ * treated as TOX_FILE_KIND_DATA.
+ */
 enum TOX_FILE_KIND {
 
     /**
@@ -1735,7 +2014,7 @@ typedef void tox_file_recv_control_cb(Tox *tox, uint32_t friend_number, uint32_t
  * This event is triggered when a file control command is received from a
  * friend.
  */
-void tox_callback_file_recv_control(Tox *tox, tox_file_recv_control_cb *callback, void *user_data);
+void tox_callback_file_recv_control(Tox *tox, tox_file_recv_control_cb *callback);
 
 typedef enum TOX_ERR_FILE_SEEK {
 
@@ -1930,7 +2209,7 @@ typedef enum TOX_ERR_FILE_SEND {
  *
  * @return A file number used as an identifier in subsequent callbacks. This
  *   number is per friend. File numbers are reused after a transfer terminates.
- *   On failure, this function returns UINT32_MAX. Any pattern in file numbers
+ *   On failure, this function returns an unspecified value. Any pattern in file numbers
  *   should not be relied on.
  */
 uint32_t tox_file_send(Tox *tox, uint32_t friend_number, uint32_t kind, uint64_t file_size, const uint8_t *file_id,
@@ -2039,7 +2318,7 @@ typedef void tox_file_chunk_request_cb(Tox *tox, uint32_t friend_number, uint32_
  *
  * This event is triggered when Core is ready to send more file data.
  */
-void tox_callback_file_chunk_request(Tox *tox, tox_file_chunk_request_cb *callback, void *user_data);
+void tox_callback_file_chunk_request(Tox *tox, tox_file_chunk_request_cb *callback);
 
 
 /*******************************************************************************
@@ -2061,7 +2340,7 @@ void tox_callback_file_chunk_request(Tox *tox, tox_file_chunk_request_cb *callba
  *   transfer request.
  * @param file_number The friend-specific file number the data received is
  *   associated with.
- * @param kind The meaning of the file to be sent.
+ * @param kind The meaning of the file that was sent.
  * @param file_size Size in bytes of the file the client wants to send,
  *   UINT64_MAX if unknown or streaming.
  * @param filename Name of the file. Does not need to be the actual name. This
@@ -2077,7 +2356,7 @@ typedef void tox_file_recv_cb(Tox *tox, uint32_t friend_number, uint32_t file_nu
  *
  * This event is triggered when a file transfer request is received.
  */
-void tox_callback_file_recv(Tox *tox, tox_file_recv_cb *callback, void *user_data);
+void tox_callback_file_recv(Tox *tox, tox_file_recv_cb *callback);
 
 /**
  * When length is 0, the transfer is finished and the client should release the
@@ -2105,25 +2384,570 @@ typedef void tox_file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t f
  * This event is first triggered when a file transfer request is received, and
  * subsequently when a chunk of file data for an accepted request was received.
  */
-void tox_callback_file_recv_chunk(Tox *tox, tox_file_recv_chunk_cb *callback, void *user_data);
+void tox_callback_file_recv_chunk(Tox *tox, tox_file_recv_chunk_cb *callback);
 
 
 /*******************************************************************************
  *
- * :: Group chat management
+ * :: Conference management
  *
  ******************************************************************************/
 
 
 
-
-/*******************************************************************************
+/**
+ * Conference types for the conference_invite event.
  *
- * :: Group chat message sending and receiving
+ * @deprecated All UPPER_CASE enum type names are deprecated. Use the
+ *   Camel_Snake_Case versions, instead.
+ */
+typedef enum TOX_CONFERENCE_TYPE {
+
+    /**
+     * Text-only conferences that must be accepted with the tox_conference_join function.
+     */
+    TOX_CONFERENCE_TYPE_TEXT,
+
+    /**
+     * Video conference. The function to accept these is in toxav.
+     */
+    TOX_CONFERENCE_TYPE_AV,
+
+} TOX_CONFERENCE_TYPE;
+
+
+/**
+ * The invitation will remain valid until the inviting friend goes offline
+ * or exits the conference.
  *
- ******************************************************************************/
+ * @param friend_number The friend who invited us.
+ * @param type The conference type (text only or audio/video).
+ * @param cookie A piece of data of variable length required to join the
+ *   conference.
+ * @param length The length of the cookie.
+ */
+typedef void tox_conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE type, const uint8_t *cookie,
+                                      size_t length, void *user_data);
 
 
+/**
+ * Set the callback for the `conference_invite` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client is invited to join a conference.
+ */
+void tox_callback_conference_invite(Tox *tox, tox_conference_invite_cb *callback);
+
+/**
+ * @param conference_number The conference number of the conference to which we have connected.
+ */
+typedef void tox_conference_connected_cb(Tox *tox, uint32_t conference_number, void *user_data);
+
+
+/**
+ * Set the callback for the `conference_connected` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client successfully connects to a
+ * conference after joining it with the tox_conference_join function.
+ */
+void tox_callback_conference_connected(Tox *tox, tox_conference_connected_cb *callback);
+
+/**
+ * @param conference_number The conference number of the conference the message is intended for.
+ * @param peer_number The ID of the peer who sent the message.
+ * @param type The type of message (normal, action, ...).
+ * @param message The message data.
+ * @param length The length of the message.
+ */
+typedef void tox_conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number,
+                                       TOX_MESSAGE_TYPE type, const uint8_t *message, size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `conference_message` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client receives a conference message.
+ */
+void tox_callback_conference_message(Tox *tox, tox_conference_message_cb *callback);
+
+/**
+ * @param conference_number The conference number of the conference the title change is intended for.
+ * @param peer_number The ID of the peer who changed the title.
+ * @param title The title data.
+ * @param length The title length.
+ */
+typedef void tox_conference_title_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, const uint8_t *title,
+                                     size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `conference_title` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer changes the conference title.
+ *
+ * If peer_number == UINT32_MAX, then author is unknown (e.g. initial joining the conference).
+ */
+void tox_callback_conference_title(Tox *tox, tox_conference_title_cb *callback);
+
+/**
+ * @param conference_number The conference number of the conference the
+ *   peer is in.
+ * @param peer_number The ID of the peer who changed their nickname.
+ * @param name A byte array containing the new nickname.
+ * @param length The size of the name byte array.
+ */
+typedef void tox_conference_peer_name_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number,
+        const uint8_t *name, size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `conference_peer_name` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer changes their name.
+ */
+void tox_callback_conference_peer_name(Tox *tox, tox_conference_peer_name_cb *callback);
+
+/**
+ * @param conference_number The conference number of the conference the
+ *   peer is in.
+ */
+typedef void tox_conference_peer_list_changed_cb(Tox *tox, uint32_t conference_number, void *user_data);
+
+
+/**
+ * Set the callback for the `conference_peer_list_changed` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer joins or leaves the conference.
+ */
+void tox_callback_conference_peer_list_changed(Tox *tox, tox_conference_peer_list_changed_cb *callback);
+
+typedef enum TOX_ERR_CONFERENCE_NEW {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_NEW_OK,
+
+    /**
+     * The conference instance failed to initialize.
+     */
+    TOX_ERR_CONFERENCE_NEW_INIT,
+
+} TOX_ERR_CONFERENCE_NEW;
+
+
+/**
+ * Creates a new conference.
+ *
+ * This function creates a new text conference.
+ *
+ * @return conference number on success, or an unspecified value on failure.
+ */
+uint32_t tox_conference_new(Tox *tox, TOX_ERR_CONFERENCE_NEW *error);
+
+typedef enum TOX_ERR_CONFERENCE_DELETE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_DELETE_OK,
+
+    /**
+     * The conference number passed did not designate a valid conference.
+     */
+    TOX_ERR_CONFERENCE_DELETE_CONFERENCE_NOT_FOUND,
+
+} TOX_ERR_CONFERENCE_DELETE;
+
+
+/**
+ * This function deletes a conference.
+ *
+ * @param conference_number The conference number of the conference to be deleted.
+ *
+ * @return true on success.
+ */
+bool tox_conference_delete(Tox *tox, uint32_t conference_number, TOX_ERR_CONFERENCE_DELETE *error);
+
+/**
+ * Error codes for peer info queries.
+ */
+typedef enum TOX_ERR_CONFERENCE_PEER_QUERY {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_PEER_QUERY_OK,
+
+    /**
+     * The conference number passed did not designate a valid conference.
+     */
+    TOX_ERR_CONFERENCE_PEER_QUERY_CONFERENCE_NOT_FOUND,
+
+    /**
+     * The peer number passed did not designate a valid peer.
+     */
+    TOX_ERR_CONFERENCE_PEER_QUERY_PEER_NOT_FOUND,
+
+    /**
+     * The client is not connected to the conference.
+     */
+    TOX_ERR_CONFERENCE_PEER_QUERY_NO_CONNECTION,
+
+} TOX_ERR_CONFERENCE_PEER_QUERY;
+
+
+/**
+ * Return the number of peers in the conference. Return value is unspecified on failure.
+ */
+uint32_t tox_conference_peer_count(const Tox *tox, uint32_t conference_number, TOX_ERR_CONFERENCE_PEER_QUERY *error);
+
+/**
+ * Return the length of the peer's name. Return value is unspecified on failure.
+ */
+size_t tox_conference_peer_get_name_size(const Tox *tox, uint32_t conference_number, uint32_t peer_number,
+        TOX_ERR_CONFERENCE_PEER_QUERY *error);
+
+/**
+ * Copy the name of peer_number who is in conference_number to name.
+ * name must be at least TOX_MAX_NAME_LENGTH long.
+ *
+ * @return true on success.
+ */
+bool tox_conference_peer_get_name(const Tox *tox, uint32_t conference_number, uint32_t peer_number, uint8_t *name,
+                                  TOX_ERR_CONFERENCE_PEER_QUERY *error);
+
+/**
+ * Copy the public key of peer_number who is in conference_number to public_key.
+ * public_key must be TOX_PUBLIC_KEY_SIZE long.
+ *
+ * @return true on success.
+ */
+bool tox_conference_peer_get_public_key(const Tox *tox, uint32_t conference_number, uint32_t peer_number,
+                                        uint8_t *public_key, TOX_ERR_CONFERENCE_PEER_QUERY *error);
+
+/**
+ * Return true if passed peer_number corresponds to our own.
+ */
+bool tox_conference_peer_number_is_ours(const Tox *tox, uint32_t conference_number, uint32_t peer_number,
+                                        TOX_ERR_CONFERENCE_PEER_QUERY *error);
+
+typedef enum TOX_ERR_CONFERENCE_INVITE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_INVITE_OK,
+
+    /**
+     * The conference number passed did not designate a valid conference.
+     */
+    TOX_ERR_CONFERENCE_INVITE_CONFERENCE_NOT_FOUND,
+
+    /**
+     * The invite packet failed to send.
+     */
+    TOX_ERR_CONFERENCE_INVITE_FAIL_SEND,
+
+    /**
+     * The client is not connected to the conference.
+     */
+    TOX_ERR_CONFERENCE_INVITE_NO_CONNECTION,
+
+} TOX_ERR_CONFERENCE_INVITE;
+
+
+/**
+ * Invites a friend to a conference.
+ *
+ * We must be connected to the conference, meaning that the conference has not
+ * been deleted, and either we created the conference with the tox_conference_new function,
+ * or a `conference_connected` event has occurred for the conference.
+ *
+ * @param friend_number The friend number of the friend we want to invite.
+ * @param conference_number The conference number of the conference we want to invite the friend to.
+ *
+ * @return true on success.
+ */
+bool tox_conference_invite(Tox *tox, uint32_t friend_number, uint32_t conference_number,
+                           TOX_ERR_CONFERENCE_INVITE *error);
+
+typedef enum TOX_ERR_CONFERENCE_JOIN {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_JOIN_OK,
+
+    /**
+     * The cookie passed has an invalid length.
+     */
+    TOX_ERR_CONFERENCE_JOIN_INVALID_LENGTH,
+
+    /**
+     * The conference is not the expected type. This indicates an invalid cookie.
+     */
+    TOX_ERR_CONFERENCE_JOIN_WRONG_TYPE,
+
+    /**
+     * The friend number passed does not designate a valid friend.
+     */
+    TOX_ERR_CONFERENCE_JOIN_FRIEND_NOT_FOUND,
+
+    /**
+     * Client is already in this conference.
+     */
+    TOX_ERR_CONFERENCE_JOIN_DUPLICATE,
+
+    /**
+     * Conference instance failed to initialize.
+     */
+    TOX_ERR_CONFERENCE_JOIN_INIT_FAIL,
+
+    /**
+     * The join packet failed to send.
+     */
+    TOX_ERR_CONFERENCE_JOIN_FAIL_SEND,
+
+} TOX_ERR_CONFERENCE_JOIN;
+
+
+/**
+ * Joins a conference that the client has been invited to.
+ *
+ * @param friend_number The friend number of the friend who sent the invite.
+ * @param cookie Received via the `conference_invite` event.
+ * @param length The size of cookie.
+ *
+ * @return conference number on success, an unspecified value on failure.
+ */
+uint32_t tox_conference_join(Tox *tox, uint32_t friend_number, const uint8_t *cookie, size_t length,
+                             TOX_ERR_CONFERENCE_JOIN *error);
+
+typedef enum TOX_ERR_CONFERENCE_SEND_MESSAGE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_SEND_MESSAGE_OK,
+
+    /**
+     * The conference number passed did not designate a valid conference.
+     */
+    TOX_ERR_CONFERENCE_SEND_MESSAGE_CONFERENCE_NOT_FOUND,
+
+    /**
+     * The message is too long.
+     */
+    TOX_ERR_CONFERENCE_SEND_MESSAGE_TOO_LONG,
+
+    /**
+     * The client is not connected to the conference.
+     */
+    TOX_ERR_CONFERENCE_SEND_MESSAGE_NO_CONNECTION,
+
+    /**
+     * The message packet failed to send.
+     */
+    TOX_ERR_CONFERENCE_SEND_MESSAGE_FAIL_SEND,
+
+} TOX_ERR_CONFERENCE_SEND_MESSAGE;
+
+
+/**
+ * Send a text chat message to the conference.
+ *
+ * This function creates a conference message packet and pushes it into the send
+ * queue.
+ *
+ * The message length may not exceed TOX_MAX_MESSAGE_LENGTH. Larger messages
+ * must be split by the client and sent as separate messages. Other clients can
+ * then reassemble the fragments.
+ *
+ * @param conference_number The conference number of the conference the message is intended for.
+ * @param type Message type (normal, action, ...).
+ * @param message A non-NULL pointer to the first element of a byte array
+ *   containing the message text.
+ * @param length Length of the message to be sent.
+ *
+ * @return true on success.
+ */
+bool tox_conference_send_message(Tox *tox, uint32_t conference_number, TOX_MESSAGE_TYPE type, const uint8_t *message,
+                                 size_t length, TOX_ERR_CONFERENCE_SEND_MESSAGE *error);
+
+typedef enum TOX_ERR_CONFERENCE_TITLE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_TITLE_OK,
+
+    /**
+     * The conference number passed did not designate a valid conference.
+     */
+    TOX_ERR_CONFERENCE_TITLE_CONFERENCE_NOT_FOUND,
+
+    /**
+     * The title is too long or empty.
+     */
+    TOX_ERR_CONFERENCE_TITLE_INVALID_LENGTH,
+
+    /**
+     * The title packet failed to send.
+     */
+    TOX_ERR_CONFERENCE_TITLE_FAIL_SEND,
+
+} TOX_ERR_CONFERENCE_TITLE;
+
+
+/**
+ * Return the length of the conference title. Return value is unspecified on failure.
+ *
+ * The return value is equal to the `length` argument received by the last
+ * `conference_title` callback.
+ */
+size_t tox_conference_get_title_size(const Tox *tox, uint32_t conference_number, TOX_ERR_CONFERENCE_TITLE *error);
+
+/**
+ * Write the title designated by the given conference number to a byte array.
+ *
+ * Call tox_conference_get_title_size to determine the allocation size for the `title` parameter.
+ *
+ * The data written to `title` is equal to the data received by the last
+ * `conference_title` callback.
+ *
+ * @param title A valid memory region large enough to store the title.
+ *   If this parameter is NULL, this function has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_conference_get_title(const Tox *tox, uint32_t conference_number, uint8_t *title,
+                              TOX_ERR_CONFERENCE_TITLE *error);
+
+/**
+ * Set the conference title and broadcast it to the rest of the conference.
+ *
+ * Title length cannot be longer than TOX_MAX_NAME_LENGTH.
+ *
+ * @return true on success.
+ */
+bool tox_conference_set_title(Tox *tox, uint32_t conference_number, const uint8_t *title, size_t length,
+                              TOX_ERR_CONFERENCE_TITLE *error);
+
+/**
+ * Return the number of conferences in the Tox instance.
+ * This should be used to determine how much memory to allocate for `tox_conference_get_chatlist`.
+ */
+size_t tox_conference_get_chatlist_size(const Tox *tox);
+
+/**
+ * Copy a list of valid conference IDs into the array chatlist. Determine how much space
+ * to allocate for the array with the `tox_conference_get_chatlist_size` function.
+ */
+void tox_conference_get_chatlist(const Tox *tox, uint32_t *chatlist);
+
+/**
+ * Returns the type of conference (TOX_CONFERENCE_TYPE) that conference_number is. Return value is
+ * unspecified on failure.
+ */
+typedef enum TOX_ERR_CONFERENCE_GET_TYPE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_GET_TYPE_OK,
+
+    /**
+     * The conference number passed did not designate a valid conference.
+     */
+    TOX_ERR_CONFERENCE_GET_TYPE_CONFERENCE_NOT_FOUND,
+
+} TOX_ERR_CONFERENCE_GET_TYPE;
+
+
+TOX_CONFERENCE_TYPE tox_conference_get_type(const Tox *tox, uint32_t conference_number,
+        TOX_ERR_CONFERENCE_GET_TYPE *error);
+
+/**
+ * Get the conference unique ID.
+ *
+ * If id is NULL, this function has no effect.
+ *
+ * @param id A memory region large enough to store TOX_CONFERENCE_ID_SIZE bytes.
+ *
+ * @return true on success.
+ */
+bool tox_conference_get_id(const Tox *tox, uint32_t conference_number, uint8_t *id);
+
+typedef enum TOX_ERR_CONFERENCE_BY_ID {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_BY_ID_OK,
+
+    /**
+     * One of the arguments to the function was NULL when it was not expected.
+     */
+    TOX_ERR_CONFERENCE_BY_ID_NULL,
+
+    /**
+     * No conference with the given id exists on the conference list.
+     */
+    TOX_ERR_CONFERENCE_BY_ID_NOT_FOUND,
+
+} TOX_ERR_CONFERENCE_BY_ID;
+
+
+/**
+ * Return the conference number associated with the specified id.
+ *
+ * @param id A byte array containing the conference id (TOX_CONFERENCE_ID_SIZE).
+ *
+ * @return the conference number on success, an unspecified value on failure.
+ */
+uint32_t tox_conference_by_id(const Tox *tox, const uint8_t *id, TOX_ERR_CONFERENCE_BY_ID *error);
+
+/**
+ * Get the conference unique ID.
+ *
+ * If uid is NULL, this function has no effect.
+ *
+ * @param uid A memory region large enough to store TOX_CONFERENCE_UID_SIZE bytes.
+ *
+ * @return true on success.
+ * @deprecated use tox_conference_get_id instead (exactly the same function, just renamed).
+ */
+bool tox_conference_get_uid(const Tox *tox, uint32_t conference_number, uint8_t *uid);
+
+typedef enum TOX_ERR_CONFERENCE_BY_UID {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_CONFERENCE_BY_UID_OK,
+
+    /**
+     * One of the arguments to the function was NULL when it was not expected.
+     */
+    TOX_ERR_CONFERENCE_BY_UID_NULL,
+
+    /**
+     * No conference with the given uid exists on the conference list.
+     */
+    TOX_ERR_CONFERENCE_BY_UID_NOT_FOUND,
+
+} TOX_ERR_CONFERENCE_BY_UID;
+
+
+/**
+ * Return the conference number associated with the specified uid.
+ *
+ * @param uid A byte array containing the conference id (TOX_CONFERENCE_UID_SIZE).
+ *
+ * @return the conference number on success, an unspecified value on failure.
+ * @deprecated use tox_conference_by_id instead (exactly the same function, just renamed).
+ */
+uint32_t tox_conference_by_uid(const Tox *tox, const uint8_t *uid, TOX_ERR_CONFERENCE_BY_UID *error);
 
 
 /*******************************************************************************
@@ -2235,7 +3059,7 @@ typedef void tox_friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const 
  * Set the callback for the `friend_lossy_packet` event. Pass NULL to unset.
  *
  */
-void tox_callback_friend_lossy_packet(Tox *tox, tox_friend_lossy_packet_cb *callback, void *user_data);
+void tox_callback_friend_lossy_packet(Tox *tox, tox_friend_lossy_packet_cb *callback);
 
 /**
  * @param friend_number The friend number of the friend who sent the packet.
@@ -2250,7 +3074,7 @@ typedef void tox_friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, con
  * Set the callback for the `friend_lossless_packet` event. Pass NULL to unset.
  *
  */
-void tox_callback_friend_lossless_packet(Tox *tox, tox_friend_lossless_packet_cb *callback, void *user_data);
+void tox_callback_friend_lossless_packet(Tox *tox, tox_friend_lossless_packet_cb *callback);
 
 
 /*******************************************************************************
@@ -2301,10 +3125,1825 @@ uint16_t tox_self_get_udp_port(const Tox *tox, TOX_ERR_GET_PORT *error);
  */
 uint16_t tox_self_get_tcp_port(const Tox *tox, TOX_ERR_GET_PORT *error);
 
-#include "tox_old.h"
+
+/*******************************************************************************
+ *
+ * :: Group chats
+ *
+ ******************************************************************************/
+
+
+
+
+/*******************************************************************************
+ *
+ * :: Group chat numeric constants
+ *
+ ******************************************************************************/
+
+
+
+/**
+ * Maximum length of a group topic.
+ */
+#define TOX_GROUP_MAX_TOPIC_LENGTH     512
+
+uint32_t tox_group_max_topic_length(void);
+
+/**
+ * Maximum length of a peer part message.
+ */
+#define TOX_GROUP_MAX_PART_LENGTH      128
+
+uint32_t tox_group_max_part_length(void);
+
+/**
+ * Maximum length of a group name.
+ */
+#define TOX_GROUP_MAX_GROUP_NAME_LENGTH 48
+
+uint32_t tox_group_max_group_name_length(void);
+
+/**
+ * Maximum length of a group password.
+ */
+#define TOX_GROUP_MAX_PASSWORD_SIZE    32
+
+uint32_t tox_group_max_password_size(void);
+
+/**
+ * Number of bytes in a group Chat ID.
+ */
+#define TOX_GROUP_CHAT_ID_SIZE         32
+
+uint32_t tox_group_chat_id_size(void);
+
+/**
+ * Size of a peer public key.
+ */
+#define TOX_GROUP_PEER_PUBLIC_KEY_SIZE 32
+
+uint32_t tox_group_peer_public_key_size(void);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat state enumerators
+ *
+ ******************************************************************************/
+
+
+
+typedef enum TOX_GROUP_PRIVACY_STATE {
+
+    /**
+     * The group is considered to be public. Anyone may join the group using the Chat ID.
+     *
+     * If the group is in this state, even if the Chat ID is never explicitly shared
+     * with someone outside of the group, information including the Chat ID, IP addresses,
+     * and peer ID's (but not Tox ID's) is visible to anyone with access to a node
+     * storing a DHT entry for the given group.
+     */
+    TOX_GROUP_PRIVACY_STATE_PUBLIC,
+
+    /**
+     * The group is considered to be private. The only way to join the group is by having
+     * someone in your contact list send you an invite.
+     *
+     * If the group is in this state, no group information (mentioned above) is present in the DHT;
+     * the DHT is not used for any purpose at all. If a public group is set to private,
+     * all DHT information related to the group will expire shortly.
+     */
+    TOX_GROUP_PRIVACY_STATE_PRIVATE,
+
+} TOX_GROUP_PRIVACY_STATE;
+
+
+/**
+ * Represents group roles.
+ *
+ * Roles are are hierarchical in that each role has a set of privileges plus all the privileges
+ * of the roles below it.
+ */
+typedef enum TOX_GROUP_ROLE {
+
+    /**
+     * May kick and ban all other peers as well as set their role to anything (except founder).
+     * Founders may also set the group password, toggle the privacy state, and set the peer limit.
+     */
+    TOX_GROUP_ROLE_FOUNDER,
+
+    /**
+     * May kick, ban and set the user and observer roles for peers below this role.
+     * May also set the group topic.
+     */
+    TOX_GROUP_ROLE_MODERATOR,
+
+    /**
+     * May communicate with other peers normally.
+     */
+    TOX_GROUP_ROLE_USER,
+
+    /**
+     * May observe the group and ignore peers; may not communicate with other peers or with the group.
+     */
+    TOX_GROUP_ROLE_OBSERVER,
+
+} TOX_GROUP_ROLE;
+
+
+
+/*******************************************************************************
+ *
+ * :: Group chat instance management
+ *
+ ******************************************************************************/
+
+
+
+typedef enum TOX_ERR_GROUP_NEW {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_NEW_OK,
+
+    /**
+     * The group name exceeded TOX_GROUP_MAX_GROUP_NAME_LENGTH.
+     */
+    TOX_ERR_GROUP_NEW_TOO_LONG,
+
+    /**
+     * group_name is NULL or length is zero.
+     */
+    TOX_ERR_GROUP_NEW_EMPTY,
+
+    /**
+     * TOX_GROUP_PRIVACY_STATE is an invalid type.
+     */
+    TOX_ERR_GROUP_NEW_PRIVACY,
+
+    /**
+     * The group instance failed to initialize.
+     */
+    TOX_ERR_GROUP_NEW_INIT,
+
+    /**
+     * The group state failed to initialize. This usually indicates that something went wrong
+     * related to cryptographic signing.
+     */
+    TOX_ERR_GROUP_NEW_STATE,
+
+    /**
+     * The group failed to announce to the DHT. This indicates a network related error.
+     */
+    TOX_ERR_GROUP_NEW_ANNOUNCE,
+
+} TOX_ERR_GROUP_NEW;
+
+
+/**
+ * Creates a new group chat.
+ *
+ * This function creates a new group chat object and adds it to the chats array.
+ *
+ * The client should initiate its peer list with self info after calling this function, as
+ * the peer_join callback will not be triggered.
+ *
+ * @param privacy_state The privacy state of the group. If this is set to TOX_GROUP_PRIVACY_STATE_PUBLIC,
+ *   the group will attempt to announce itself to the DHT and anyone with the Chat ID may join.
+ *   Otherwise a friend invite will be required to join the group.
+ * @param group_name The name of the group. The name must be non-NULL.
+ * @param length The length of the group name. This must be greater than zero and no larger than
+ *   TOX_GROUP_MAX_GROUP_NAME_LENGTH.
+ *
+ * @return groupnumber on success, UINT32_MAX on failure.
+ */
+uint32_t tox_group_new(Tox *tox, TOX_GROUP_PRIVACY_STATE privacy_state, const uint8_t *group_name, size_t length,
+                       TOX_ERR_GROUP_NEW *error);
+
+typedef enum TOX_ERR_GROUP_JOIN {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_JOIN_OK,
+
+    /**
+     * The group instance failed to initialize.
+     */
+    TOX_ERR_GROUP_JOIN_INIT,
+
+    /**
+     * The chat_id pointer is set to NULL or a group with chat_id already exists. This usually
+     * happens if the client attempts to create multiple sessions for the same group.
+     */
+    TOX_ERR_GROUP_JOIN_BAD_CHAT_ID,
+
+    /**
+     * Password length exceeded TOX_GROUP_MAX_PASSWORD_SIZE.
+     */
+    TOX_ERR_GROUP_JOIN_TOO_LONG,
+
+} TOX_ERR_GROUP_JOIN;
+
+
+/**
+ * Joins a group chat with specified Chat ID.
+ *
+ * This function creates a new group chat object, adds it to the chats array, and sends
+ * a DHT announcement to find peers in the group associated with chat_id. Once a peer has been
+ * found a join attempt will be initiated.
+ *
+ * @param chat_id The Chat ID of the group you wish to join. This must be TOX_GROUP_CHAT_ID_SIZE bytes.
+ * @param password The password required to join the group. Set to NULL if no password is required.
+ * @param length The length of the password. If length is equal to zero,
+ *   the password parameter is ignored. length must be no larger than TOX_GROUP_MAX_PASSWORD_SIZE.
+ *
+ * @return groupnumber on success, UINT32_MAX on failure.
+ */
+uint32_t tox_group_join(Tox *tox, const uint8_t *chat_id, const uint8_t *password, size_t length,
+                        TOX_ERR_GROUP_JOIN *error);
+
+typedef enum TOX_ERR_GROUP_RECONNECT {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_RECONNECT_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_RECONNECT_GROUP_NOT_FOUND,
+
+} TOX_ERR_GROUP_RECONNECT;
+
+
+/**
+ * Reconnects to a group.
+ *
+ * This function disconnects from all peers in the group, then attempts to reconnect with the group.
+ * The caller's state is not changed (i.e. name, status, role, chat public key etc.)
+ *
+ * @param groupnumber The group number of the group we wish to reconnect to.
+ *
+ * @return true on success.
+ */
+bool tox_group_reconnect(Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_RECONNECT *error);
+
+typedef enum TOX_ERR_GROUP_LEAVE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_LEAVE_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_LEAVE_GROUP_NOT_FOUND,
+
+    /**
+     * Message length exceeded TOX_GROUP_MAX_PART_LENGTH.
+     */
+    TOX_ERR_GROUP_LEAVE_TOO_LONG,
+
+    /**
+     * The parting packet failed to send.
+     */
+    TOX_ERR_GROUP_LEAVE_FAIL_SEND,
+
+    /**
+     * The group chat instance failed to be deleted. This may occur due to memory related errors.
+     */
+    TOX_ERR_GROUP_LEAVE_DELETE_FAIL,
+
+} TOX_ERR_GROUP_LEAVE;
+
+
+/**
+ * Leaves a group.
+ *
+ * This function sends a parting packet containing a custom (non-obligatory) message to all
+ * peers in a group, and deletes the group from the chat array. All group state information is permanently
+ * lost, including keys and role credentials.
+ *
+ * @param groupnumber The group number of the group we wish to leave.
+ * @param message The parting message to be sent to all the peers. Set to NULL if we do not wish to
+ *   send a parting message.
+ * @param length The length of the parting message. Set to 0 if we do not wish to send a parting message.
+ *
+ * @return true if the group chat instance is successfully deleted.
+ */
+bool tox_group_leave(Tox *tox, uint32_t groupnumber, const uint8_t *message, size_t length, TOX_ERR_GROUP_LEAVE *error);
+
+
+/*******************************************************************************
+ *
+ * :: Group user-visible client information (nickname/status/role/public key)
+ *
+ ******************************************************************************/
+
+
+
+/**
+ * General error codes for self state get and size functions.
+ */
+typedef enum TOX_ERR_GROUP_SELF_QUERY {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_SELF_QUERY_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_SELF_QUERY_GROUP_NOT_FOUND,
+
+} TOX_ERR_GROUP_SELF_QUERY;
+
+
+/**
+ * Error codes for self name setting.
+ */
+typedef enum TOX_ERR_GROUP_SELF_NAME_SET {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_SELF_NAME_SET_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_SELF_NAME_SET_GROUP_NOT_FOUND,
+
+    /**
+     * Name length exceeded TOX_MAX_NAME_LENGTH.
+     */
+    TOX_ERR_GROUP_SELF_NAME_SET_TOO_LONG,
+
+    /**
+     * The length given to the set function is zero or name is a NULL pointer.
+     */
+    TOX_ERR_GROUP_SELF_NAME_SET_INVALID,
+
+    /**
+     * The name is already taken by another peer in the group.
+     */
+    TOX_ERR_GROUP_SELF_NAME_SET_TAKEN,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_SELF_NAME_SET_FAIL_SEND,
+
+} TOX_ERR_GROUP_SELF_NAME_SET;
+
+
+/**
+ * Set the client's nickname for the group instance designated by the given group number.
+ *
+ * Nickname length cannot exceed TOX_MAX_NAME_LENGTH. If length is equal to zero or name is a NULL
+ * pointer, the function call will fail.
+ *
+ * @param name A byte array containing the new nickname.
+ * @param length The size of the name byte array.
+ *
+ * @return true on success.
+ */
+bool tox_group_self_set_name(Tox *tox, uint32_t groupnumber, const uint8_t *name, size_t length,
+                             TOX_ERR_GROUP_SELF_NAME_SET *error);
+
+/**
+ * Return the length of the client's current nickname for the group instance designated
+ * by groupnumber as passed to tox_group_self_set_name.
+ *
+ * If no nickname was set before calling this function, the name is empty,
+ * and this function returns 0.
+ *
+ * @see threading for concurrency implications.
+ */
+size_t tox_group_self_get_name_size(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_SELF_QUERY *error);
+
+/**
+ * Write the nickname set by tox_group_self_set_name to a byte array.
+ *
+ * If no nickname was set before calling this function, the name is empty,
+ * and this function has no effect.
+ *
+ * Call tox_group_self_get_name_size to find out how much memory to allocate for the result.
+ *
+ * @param name A valid memory location large enough to hold the nickname.
+ *   If this parameter is NULL, the function has no effect.
+ *
+ * @returns true on success.
+ */
+bool tox_group_self_get_name(const Tox *tox, uint32_t groupnumber, uint8_t *name, TOX_ERR_GROUP_SELF_QUERY *error);
+
+/**
+ * Error codes for self status setting.
+ */
+typedef enum TOX_ERR_GROUP_SELF_STATUS_SET {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_SELF_STATUS_SET_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_SELF_STATUS_SET_GROUP_NOT_FOUND,
+
+    /**
+     * An invalid type was passed to the set function.
+     */
+    TOX_ERR_GROUP_SELF_STATUS_SET_INVALID,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_SELF_STATUS_SET_FAIL_SEND,
+
+} TOX_ERR_GROUP_SELF_STATUS_SET;
+
+
+/**
+ * Set the client's status for the group instance. Status must be a TOX_USER_STATUS.
+ *
+ * @return true on success.
+ */
+bool tox_group_self_set_status(Tox *tox, uint32_t groupnumber, TOX_USER_STATUS status,
+                               TOX_ERR_GROUP_SELF_STATUS_SET *error);
+
+/**
+ * returns the client's status for the group instance on success.
+ * return value is unspecified on failure.
+ */
+TOX_USER_STATUS tox_group_self_get_status(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_SELF_QUERY *error);
+
+/**
+ * returns the client's role for the group instance on success.
+ * return value is unspecified on failure.
+ */
+TOX_GROUP_ROLE tox_group_self_get_role(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_SELF_QUERY *error);
+
+/**
+ * returns the client's peer id for the group instance on success.
+ * return value is unspecified on failure.
+ */
+uint32_t tox_group_self_get_peer_id(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_SELF_QUERY *error);
+
+/**
+ * Write the client's group public key designated by the given group number to a byte array.
+ *
+ * This key will be parmanently tied to the client's identity for this particular group until
+ * the client explicitly leaves the group or gets kicked/banned. This key is the only way for
+ * other peers to reliably identify the client across client restarts.
+ *
+ * `public_key` should have room for at least TOX_GROUP_PEER_PUBLIC_KEY_SIZE bytes.
+ *
+ * @param public_key A valid memory region large enough to store the public key.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_self_get_public_key(const Tox *tox, uint32_t groupnumber, uint8_t *public_key,
+                                   TOX_ERR_GROUP_SELF_QUERY *error);
+
+
+/*******************************************************************************
+ *
+ * :: Peer-specific group state queries.
+ *
+ ******************************************************************************/
+
+
+
+/**
+ * Error codes for peer info queries.
+ */
+typedef enum TOX_ERR_GROUP_PEER_QUERY {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_PEER_QUERY_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_PEER_QUERY_GROUP_NOT_FOUND,
+
+    /**
+     * The ID passed did not designate a valid peer.
+     */
+    TOX_ERR_GROUP_PEER_QUERY_PEER_NOT_FOUND,
+
+} TOX_ERR_GROUP_PEER_QUERY;
+
+
+/**
+ * Return the length of the peer's name. If the group number or ID is invalid, the
+ * return value is unspecified.
+ *
+ * The return value is equal to the `length` argument received by the last
+ * `group_peer_name` callback.
+ */
+size_t tox_group_peer_get_name_size(const Tox *tox, uint32_t groupnumber, uint32_t peer_id,
+                                    TOX_ERR_GROUP_PEER_QUERY *error);
+
+/**
+ * Write the name of the peer designated by the given ID to a byte
+ * array.
+ *
+ * Call tox_group_peer_get_name_size to determine the allocation size for the `name` parameter.
+ *
+ * The data written to `name` is equal to the data received by the last
+ * `group_peer_name` callback.
+ *
+ * @param groupnumber The group number of the group we wish to query.
+ * @param peer_id The ID of the peer whose name we want to retrieve.
+ * @param name A valid memory region large enough to store the friend's name.
+ *
+ * @return true on success.
+ */
+bool tox_group_peer_get_name(const Tox *tox, uint32_t groupnumber, uint32_t peer_id, uint8_t *name,
+                             TOX_ERR_GROUP_PEER_QUERY *error);
+
+/**
+ * Return the peer's user status (away/busy/...). If the ID or group number is
+ * invalid, the return value is unspecified.
+ *
+ * The status returned is equal to the last status received through the
+ * `group_peer_status` callback.
+ */
+TOX_USER_STATUS tox_group_peer_get_status(const Tox *tox, uint32_t groupnumber, uint32_t peer_id,
+        TOX_ERR_GROUP_PEER_QUERY *error);
+
+/**
+ * Return the peer's role (user/moderator/founder...). If the ID or group number is
+ * invalid, the return value is unspecified.
+ *
+ * The role returned is equal to the last role received through the
+ * `group_moderation` callback.
+ */
+TOX_GROUP_ROLE tox_group_peer_get_role(const Tox *tox, uint32_t groupnumber, uint32_t peer_id,
+                                       TOX_ERR_GROUP_PEER_QUERY *error);
+
+/**
+ * Write the group public key with the designated peer_id for the designated group number to public_key.
+ *
+ * This key will be parmanently tied to a particular peer until they explicitly leave the group or
+ * get kicked/banned, and is the only way to reliably identify the same peer across client restarts.
+ *
+ * `public_key` should have room for at least TOX_GROUP_PEER_PUBLIC_KEY_SIZE bytes.
+ *
+ * @param public_key A valid memory region large enough to store the public key.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_peer_get_public_key(const Tox *tox, uint32_t groupnumber, uint32_t peer_id, uint8_t *public_key,
+                                   TOX_ERR_GROUP_PEER_QUERY *error);
+
+/**
+ * @param groupnumber The group number of the group the name change is intended for.
+ * @param peer_id The ID of the peer who has changed their name.
+ * @param name The name data.
+ * @param length The length of the name.
+ */
+typedef void tox_group_peer_name_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *name,
+                                    size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `group_peer_name` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer changes their nickname.
+ */
+void tox_callback_group_peer_name(Tox *tox, tox_group_peer_name_cb *callback, void *user_data);
+
+/**
+ * @param groupnumber The group number of the group the status change is intended for.
+ * @param peer_id The ID of the peer who has changed their status.
+ * @param status The new status of the peer.
+ */
+typedef void tox_group_peer_status_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, TOX_USER_STATUS status,
+                                      void *user_data);
+
+
+/**
+ * Set the callback for the `group_peer_status` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer changes their status.
+ */
+void tox_callback_group_peer_status(Tox *tox, tox_group_peer_status_cb *callback, void *user_data);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat state queries and events.
+ *
+ ******************************************************************************/
+
+
+
+/**
+ * General error codes for group state get and size functions.
+ */
+typedef enum TOX_ERR_GROUP_STATE_QUERIES {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_STATE_QUERIES_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_STATE_QUERIES_GROUP_NOT_FOUND,
+
+} TOX_ERR_GROUP_STATE_QUERIES;
+
+
+/**
+ * Error codes for group topic setting.
+ */
+typedef enum TOX_ERR_GROUP_TOPIC_SET {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_TOPIC_SET_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_TOPIC_SET_GROUP_NOT_FOUND,
+
+    /**
+     * Topic length exceeded TOX_GROUP_MAX_TOPIC_LENGTH.
+     */
+    TOX_ERR_GROUP_TOPIC_SET_TOO_LONG,
+
+    /**
+     * The caller does not have the required permissions to set the topic.
+     */
+    TOX_ERR_GROUP_TOPIC_SET_PERMISSIONS,
+
+    /**
+     * The packet could not be created. This error is usually related to cryptographic signing.
+     */
+    TOX_ERR_GROUP_TOPIC_SET_FAIL_CREATE,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_TOPIC_SET_FAIL_SEND,
+
+} TOX_ERR_GROUP_TOPIC_SET;
+
+
+/**
+ * Set the group topic and broadcast it to the rest of the group.
+ *
+ * topic length cannot be longer than TOX_GROUP_MAX_TOPIC_LENGTH. If length is equal to zero or
+ * topic is set to NULL, the topic will be unset.
+ *
+ * @returns true on success.
+ */
+bool tox_group_set_topic(Tox *tox, uint32_t groupnumber, const uint8_t *topic, size_t length,
+                         TOX_ERR_GROUP_TOPIC_SET *error);
+
+/**
+ * Return the length of the group topic. If the group number is invalid, the
+ * return value is unspecified.
+ *
+ * The return value is equal to the `length` argument received by the last
+ * `group_topic` callback.
+ */
+size_t tox_group_get_topic_size(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * Write the topic designated by the given group number to a byte array.
+ *
+ * Call tox_group_get_topic_size to determine the allocation size for the `topic` parameter.
+ *
+ * The data written to `topic` is equal to the data received by the last
+ * `group_topic` callback.
+ *
+ * @param topic A valid memory region large enough to store the topic.
+ *   If this parameter is NULL, this function has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_get_topic(const Tox *tox, uint32_t groupnumber, uint8_t *topic, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * @param groupnumber The group number of the group the topic change is intended for.
+ * @param peer_id The ID of the peer who changed the topic.
+ * @param topic The topic data.
+ * @param length The topic length.
+ */
+typedef void tox_group_topic_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *topic, size_t length,
+                                void *user_data);
+
+
+/**
+ * Set the callback for the `group_topic` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer changes the group topic.
+ */
+void tox_callback_group_topic(Tox *tox, tox_group_topic_cb *callback, void *user_data);
+
+/**
+ * Return the length of the group name. If the group number is invalid, the
+ * return value is unspecified.
+ */
+size_t tox_group_get_name_size(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * Write the name of the group designated by the given group number to a byte array.
+ *
+ * Call tox_group_get_name_size to determine the allocation size for the `name` parameter.
+ *
+ * @param name A valid memory region large enough to store the group name.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_get_name(const Tox *tox, uint32_t groupnumber, uint8_t *name, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * Write the Chat ID designated by the given group number to a byte array.
+ *
+ * `chat_id` should have room for at least TOX_GROUP_CHAT_ID_SIZE bytes.
+ *
+ * @param chat_id A valid memory region large enough to store the Chat ID.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_get_chat_id(const Tox *tox, uint32_t groupnumber, uint8_t *chat_id, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * Return the number of groups in the Tox chats array.
+ */
+uint32_t tox_group_get_number_groups(const Tox *tox);
+
+/**
+ * Return the privacy state of the group designated by the given group number. If group number
+ * is invalid, the return value is unspecified.
+ *
+ * The value returned is equal to the data received by the last
+ * `group_privacy_state` callback.
+ *
+ * @see the `Group chat founder controls` section for the respective set function.
+ */
+TOX_GROUP_PRIVACY_STATE tox_group_get_privacy_state(const Tox *tox, uint32_t groupnumber,
+        TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * @param groupnumber The group number of the group the topic change is intended for.
+ * @param privacy_state The new privacy state.
+ */
+typedef void tox_group_privacy_state_cb(Tox *tox, uint32_t groupnumber, TOX_GROUP_PRIVACY_STATE privacy_state,
+                                        void *user_data);
+
+
+/**
+ * Set the callback for the `group_privacy_state` event. Pass NULL to unset.
+ *
+ * This event is triggered when the group founder changes the privacy state.
+ */
+void tox_callback_group_privacy_state(Tox *tox, tox_group_privacy_state_cb *callback, void *user_data);
+
+/**
+ * Return the maximum number of peers allowed for the group designated by the given group number.
+ * If the group number is invalid, the return value is unspecified.
+ *
+ * The value returned is equal to the data received by the last
+ * `group_peer_limit` callback.
+ *
+ * @see the `Group chat founder controls` section for the respective set function.
+ */
+uint32_t tox_group_get_peer_limit(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * @param groupnumber The group number of the group for which the peer limit has changed.
+ * @param peer_limit The new peer limit for the group.
+ */
+typedef void tox_group_peer_limit_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_limit, void *user_data);
+
+
+/**
+ * Set the callback for the `group_peer_limit` event. Pass NULL to unset.
+ *
+ * This event is triggered when the group founder changes the maximum peer limit.
+ */
+void tox_callback_group_peer_limit(Tox *tox, tox_group_peer_limit_cb *callback, void *user_data);
+
+/**
+ * Return the length of the group password. If the group number is invalid, the
+ * return value is unspecified.
+ */
+size_t tox_group_get_password_size(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * Write the password for the group designated by the given group number to a byte array.
+ *
+ * Call tox_group_get_password_size to determine the allocation size for the `password` parameter.
+ *
+ * The data received is equal to the data received by the last
+ * `group_password` callback.
+ *
+ * @see the `Group chat founder controls` section for the respective set function.
+ *
+ * @param password A valid memory region large enough to store the group password.
+ *   If this parameter is NULL, this function call has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_get_password(const Tox *tox, uint32_t groupnumber, uint8_t *password,
+                            TOX_ERR_GROUP_STATE_QUERIES *error);
+
+/**
+ * @param groupnumber The group number of the group for which the password has changed.
+ * @param password The new group password.
+ * @param length The length of the password.
+ */
+typedef void tox_group_password_cb(Tox *tox, uint32_t groupnumber, const uint8_t *password, size_t length,
+                                   void *user_data);
+
+
+/**
+ * Set the callback for the `group_password` event. Pass NULL to unset.
+ *
+ * This event is triggered when the group founder changes the group password.
+ */
+void tox_callback_group_password(Tox *tox, tox_group_password_cb *callback, void *user_data);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat message sending
+ *
+ ******************************************************************************/
+
+
+
+typedef enum TOX_ERR_GROUP_SEND_MESSAGE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_GROUP_NOT_FOUND,
+
+    /**
+     * Message length exceeded TOX_MAX_MESSAGE_LENGTH.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_TOO_LONG,
+
+    /**
+     * The message pointer is null or length is zero.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_EMPTY,
+
+    /**
+     * The message type is invalid.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_BAD_TYPE,
+
+    /**
+     * The caller does not have the required permissions to send group messages.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_PERMISSIONS,
+
+    /**
+     * Packet failed to send.
+     */
+    TOX_ERR_GROUP_SEND_MESSAGE_FAIL_SEND,
+
+} TOX_ERR_GROUP_SEND_MESSAGE;
+
+
+/**
+ * Send a text chat message to the group.
+ *
+ * This function creates a group message packet and pushes it into the send
+ * queue.
+ *
+ * The message length may not exceed TOX_MAX_MESSAGE_LENGTH. Larger messages
+ * must be split by the client and sent as separate messages. Other clients can
+ * then reassemble the fragments. Messages may not be empty.
+ *
+ * @param groupnumber The group number of the group the message is intended for.
+ * @param type Message type (normal, action, ...).
+ * @param message A non-NULL pointer to the first element of a byte array
+ *   containing the message text.
+ * @param length Length of the message to be sent.
+ *
+ * @return true on success.
+ */
+bool tox_group_send_message(Tox *tox, uint32_t groupnumber, TOX_MESSAGE_TYPE type, const uint8_t *message,
+                            size_t length, TOX_ERR_GROUP_SEND_MESSAGE *error);
+
+typedef enum TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_GROUP_NOT_FOUND,
+
+    /**
+     * The ID passed did not designate a valid peer.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_PEER_NOT_FOUND,
+
+    /**
+     * Message length exceeded TOX_MAX_MESSAGE_LENGTH.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_TOO_LONG,
+
+    /**
+     * The message pointer is null or length is zero.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_EMPTY,
+
+    /**
+     * The caller does not have the required permissions to send group messages.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_PERMISSIONS,
+
+    /**
+     * Packet failed to send.
+     */
+    TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_FAIL_SEND,
+
+} TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE;
+
+
+/**
+ * Send a text chat message to the specified peer in the specified group.
+ *
+ * This function creates a group private message packet and pushes it into the send
+ * queue.
+ *
+ * The message length may not exceed TOX_MAX_MESSAGE_LENGTH. Larger messages
+ * must be split by the client and sent as separate messages. Other clients can
+ * then reassemble the fragments. Messages may not be empty.
+ *
+ * @param groupnumber The group number of the group the message is intended for.
+ * @param peer_id The ID of the peer the message is intended for.
+ * @param message A non-NULL pointer to the first element of a byte array
+ *   containing the message text.
+ * @param length Length of the message to be sent.
+ *
+ * @return true on success.
+ */
+bool tox_group_send_private_message(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *message,
+                                    size_t length, TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE *error);
+
+typedef enum TOX_ERR_GROUP_SEND_CUSTOM_PACKET {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_SEND_CUSTOM_PACKET_GROUP_NOT_FOUND,
+
+    /**
+     * Message length exceeded TOX_MAX_MESSAGE_LENGTH.
+     */
+    TOX_ERR_GROUP_SEND_CUSTOM_PACKET_TOO_LONG,
+
+    /**
+     * The message pointer is null or length is zero.
+     */
+    TOX_ERR_GROUP_SEND_CUSTOM_PACKET_EMPTY,
+
+    /**
+     * The caller does not have the required permissions to send group messages.
+     */
+    TOX_ERR_GROUP_SEND_CUSTOM_PACKET_PERMISSIONS,
+
+} TOX_ERR_GROUP_SEND_CUSTOM_PACKET;
+
+
+/**
+ * Send a custom packet to the group.
+ *
+ * If lossless is true the packet will be lossless. Lossless packet behaviour is comparable
+ * to TCP (reliability, arrive in order) but with packets instead of a stream.
+ *
+ * If lossless is false, the packet will be lossy. Lossy packets behave like UDP packets,
+ * meaning they might never reach the other side or might arrive more than once (if someone
+ * is messing with the connection) or might arrive in the wrong order.
+ *
+ * Unless latency is an issue or message reliability is not important, it is recommended that you use
+ * lossless custom packets.
+ *
+ * @param groupnumber The group number of the group the message is intended for.
+ * @param lossless True if the packet should be lossless.
+ * @param data A byte array containing the packet data.
+ * @param length The length of the packet data byte array.
+ *
+ * @return true on success.
+ */
+bool tox_group_send_custom_packet(Tox *tox, uint32_t groupnumber, bool lossless, const uint8_t *data, size_t length,
+                                  TOX_ERR_GROUP_SEND_CUSTOM_PACKET *error);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat message receiving
+ *
+ ******************************************************************************/
+
+
+
+/**
+ * @param groupnumber The group number of the group the message is intended for.
+ * @param peer_id The ID of the peer who sent the message.
+ * @param type The type of message (normal, action, ...).
+ * @param message The message data.
+ * @param length The length of the message.
+ */
+typedef void tox_group_message_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, TOX_MESSAGE_TYPE type,
+                                  const uint8_t *message, size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `group_message` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client receives a group message.
+ */
+void tox_callback_group_message(Tox *tox, tox_group_message_cb *callback, void *user_data);
+
+/**
+ * @param groupnumber The group number of the group the private message is intended for.
+ * @param peer_id The ID of the peer who sent the private message.
+ * @param message The message data.
+ * @param length The length of the message.
+ */
+typedef void tox_group_private_message_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *message,
+        size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `group_private_message` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client receives a private message.
+ */
+void tox_callback_group_private_message(Tox *tox, tox_group_private_message_cb *callback, void *user_data);
+
+/**
+ * @param groupnumber The group number of the group the custom packet is intended for.
+ * @param peer_id The ID of the peer who sent the custom packet.
+ * @param data The custom packet data.
+ * @param length The length of the data.
+ */
+typedef void tox_group_custom_packet_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *data,
+                                        size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `group_custom_packet` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client receives a custom packet.
+ */
+void tox_callback_group_custom_packet(Tox *tox, tox_group_custom_packet_cb *callback, void *user_data);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat inviting and join/part events
+ *
+ ******************************************************************************/
+
+
+
+typedef enum TOX_ERR_GROUP_INVITE_FRIEND {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_INVITE_FRIEND_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_INVITE_FRIEND_GROUP_NOT_FOUND,
+
+    /**
+     * The friend number passed did not designate a valid friend.
+     */
+    TOX_ERR_GROUP_INVITE_FRIEND_FRIEND_NOT_FOUND,
+
+    /**
+     * Creation of the invite packet failed. This indicates a network related error.
+     */
+    TOX_ERR_GROUP_INVITE_FRIEND_INVITE_FAIL,
+
+    /**
+     * Packet failed to send.
+     */
+    TOX_ERR_GROUP_INVITE_FRIEND_FAIL_SEND,
+
+} TOX_ERR_GROUP_INVITE_FRIEND;
+
+
+/**
+ * Invite a friend to a group.
+ *
+ * This function creates an invite request packet and pushes it to the send queue.
+ *
+ * @param groupnumber The group number of the group the message is intended for.
+ * @param friend_number The friend number of the friend the invite is intended for.
+ *
+ * @return true on success.
+ */
+bool tox_group_invite_friend(Tox *tox, uint32_t groupnumber, uint32_t friend_number,
+                             TOX_ERR_GROUP_INVITE_FRIEND *error);
+
+typedef enum TOX_ERR_GROUP_INVITE_ACCEPT {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_INVITE_ACCEPT_OK,
+
+    /**
+     * The invite data is not in the expected format.
+     */
+    TOX_ERR_GROUP_INVITE_ACCEPT_BAD_INVITE,
+
+    /**
+     * The group instance failed to initialize.
+     */
+    TOX_ERR_GROUP_INVITE_ACCEPT_INIT_FAILED,
+
+    /**
+     * Password length exceeded TOX_GROUP_MAX_PASSWORD_SIZE.
+     */
+    TOX_ERR_GROUP_INVITE_ACCEPT_TOO_LONG,
+
+} TOX_ERR_GROUP_INVITE_ACCEPT;
+
+
+/**
+ * Accept an invite to a group chat that the client previously received from a friend. The invite
+ * is only valid while the inviter is present in the group.
+ *
+ * @param invite_data The invite data received from the `group_invite` event.
+ * @param length The length of the invite data.
+ * @param password The password required to join the group. Set to NULL if no password is required.
+ * @param password_length The length of the password. If password_length is equal to zero, the password
+ *    parameter will be ignored. password_length must be no larger than TOX_GROUP_MAX_PASSWORD_SIZE.
+ *
+ * @return the groupnumber on success, UINT32_MAX on failure.
+ */
+uint32_t tox_group_invite_accept(Tox *tox, const uint8_t *invite_data, size_t length, const uint8_t *password,
+                                 size_t password_length, TOX_ERR_GROUP_INVITE_ACCEPT *error);
+
+/**
+ * @param friend_number The friend number of the contact who sent the invite.
+ * @param invite_data The invite data.
+ * @param length The length of invite_data.
+ */
+typedef void tox_group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *invite_data, size_t length,
+                                 void *user_data);
+
+
+/**
+ * Set the callback for the `group_invite` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client receives a group invite from a friend. The client must store
+ * invite_data which is used to join the group via tox_group_invite_accept.
+ */
+void tox_callback_group_invite(Tox *tox, tox_group_invite_cb *callback, void *user_data);
+
+/**
+ * @param groupnumber The group number of the group in which a new peer has joined.
+ * @param peer_id The permanent ID of the new peer. This id should not be relied on for
+ * client behaviour and should be treated as a random value.
+ */
+typedef void tox_group_peer_join_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, void *user_data);
+
+
+/**
+ * Set the callback for the `group_peer_join` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer other than self joins the group.
+ */
+void tox_callback_group_peer_join(Tox *tox, tox_group_peer_join_cb *callback, void *user_data);
+
+/**
+ * @param groupnumber The group number of the group in which a peer has left.
+ * @param peer_id The ID of the peer who left the group.
+ * @param part_message The parting message data.
+ * @param length The length of the parting message.
+ */
+typedef void tox_group_peer_exit_cb(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *part_message,
+                                    size_t length, void *user_data);
+
+
+/**
+ * Set the callback for the `group_peer_exit` event. Pass NULL to unset.
+ *
+ * This event is triggered when a peer other than self exits the group.
+ */
+void tox_callback_group_peer_exit(Tox *tox, tox_group_peer_exit_cb *callback, void *user_data);
+
+/**
+ * @param groupnumber The group number of the group that the client has joined.
+ */
+typedef void tox_group_self_join_cb(Tox *tox, uint32_t groupnumber, void *user_data);
+
+
+/**
+ * Set the callback for the `group_self_join` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client has successfully joined a group. Use this to initialize
+ * any group information the client may need.
+ */
+void tox_callback_group_self_join(Tox *tox, tox_group_self_join_cb *callback, void *user_data);
+
+/**
+ * Represents types of failed group join attempts. These are used in the tox_callback_group_rejected
+ * callback when a peer fails to join a group.
+ */
+typedef enum TOX_GROUP_JOIN_FAIL {
+
+    /**
+     * You are using the same nickname as someone who is already in the group.
+     */
+    TOX_GROUP_JOIN_FAIL_NAME_TAKEN,
+
+    /**
+     * The group peer limit has been reached.
+     */
+    TOX_GROUP_JOIN_FAIL_PEER_LIMIT,
+
+    /**
+     * You have supplied an invalid password.
+     */
+    TOX_GROUP_JOIN_FAIL_INVALID_PASSWORD,
+
+    /**
+     * The join attempt failed due to an unspecified error. This often occurs when the group is
+     * not found in the DHT.
+     */
+    TOX_GROUP_JOIN_FAIL_UNKNOWN,
+
+} TOX_GROUP_JOIN_FAIL;
+
+
+/**
+ * @param groupnumber The group number of the group for which the join has failed.
+ * @param fail_type The type of group rejection.
+ */
+typedef void tox_group_join_fail_cb(Tox *tox, uint32_t groupnumber, TOX_GROUP_JOIN_FAIL fail_type, void *user_data);
+
+
+/**
+ * Set the callback for the `group_join_fail` event. Pass NULL to unset.
+ *
+ * This event is triggered when the client fails to join a group.
+ */
+void tox_callback_group_join_fail(Tox *tox, tox_group_join_fail_cb *callback, void *user_data);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat founder controls (these only work for the group founder)
+ *
+ ******************************************************************************/
+
+
+
+typedef enum TOX_ERR_GROUP_FOUNDER_SET_PASSWORD {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_GROUP_NOT_FOUND,
+
+    /**
+     * The caller does not have the required permissions to set the password.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_PERMISSIONS,
+
+    /**
+     * Password length exceeded TOX_GROUP_MAX_PASSWORD_SIZE.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_TOO_LONG,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_FAIL_SEND,
+
+} TOX_ERR_GROUP_FOUNDER_SET_PASSWORD;
+
+
+/**
+ * Set or unset the group password.
+ *
+ * This function sets the groups password, creates a new group shared state including the change,
+ * and distributes it to the rest of the group.
+ *
+ * @param groupnumber The group number of the group for which we wish to set the password.
+ * @param password The password we want to set. Set password to NULL to unset the password.
+ * @param length The length of the password. length must be no longer than TOX_GROUP_MAX_PASSWORD_SIZE.
+ *
+ * @return true on success.
+ */
+bool tox_group_founder_set_password(Tox *tox, uint32_t groupnumber, const uint8_t *password, size_t length,
+                                    TOX_ERR_GROUP_FOUNDER_SET_PASSWORD *error);
+
+typedef enum TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_GROUP_NOT_FOUND,
+
+    /**
+     * TOX_GROUP_PRIVACY_STATE is an invalid type.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_INVALID,
+
+    /**
+     * The caller does not have the required permissions to set the privacy state.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_PERMISSIONS,
+
+    /**
+     * The privacy state could not be set. This may occur due to an error related to
+     * cryptographic signing of the new shared state.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_FAIL_SET,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_FAIL_SEND,
+
+} TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE;
+
+
+/**
+ * Set the group privacy state.
+ *
+ * This function sets the group's privacy state, creates a new group shared state
+ * including the change, and distributes it to the rest of the group.
+ *
+ * If an attempt is made to set the privacy state to the same state that the group is already
+ * in, the function call will be successful and no action will be taken.
+ *
+ * @param groupnumber The group number of the group for which we wish to change the privacy state.
+ * @param privacy_state The privacy state we wish to set the group to.
+ *
+ * @return true on success.
+ */
+bool tox_group_founder_set_privacy_state(Tox *tox, uint32_t groupnumber, TOX_GROUP_PRIVACY_STATE privacy_state,
+        TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE *error);
+
+typedef enum TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_GROUP_NOT_FOUND,
+
+    /**
+     * The caller does not have the required permissions to set the peer limit.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_PERMISSIONS,
+
+    /**
+     * The peer limit could not be set. This may occur due to an error related to
+     * cryptographic signing of the new shared state.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_FAIL_SET,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_FAIL_SEND,
+
+} TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT;
+
+
+/**
+ * Set the group peer limit.
+ *
+ * This function sets a limit for the number of peers who may be in the group, creates a new
+ * group shared state including the change, and distributes it to the rest of the group.
+ *
+ * @param groupnumber The group number of the group for which we wish to set the peer limit.
+ * @param max_peers The maximum number of peers to allow in the group.
+ *
+ * @return true on success.
+ */
+bool tox_group_founder_set_peer_limit(Tox *tox, uint32_t groupnumber, uint32_t max_peers,
+                                      TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT *error);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat moderation
+ *
+ ******************************************************************************/
+
+
+
+typedef enum TOX_ERR_GROUP_TOGGLE_IGNORE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_TOGGLE_IGNORE_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_TOGGLE_IGNORE_GROUP_NOT_FOUND,
+
+    /**
+     * The ID passed did not designate a valid peer.
+     */
+    TOX_ERR_GROUP_TOGGLE_IGNORE_PEER_NOT_FOUND,
+
+} TOX_ERR_GROUP_TOGGLE_IGNORE;
+
+
+/**
+ * Ignore or unignore a peer.
+ *
+ * @param groupnumber The group number of the group the in which you wish to ignore a peer.
+ * @param peer_id The ID of the peer who shall be ignored or unignored.
+ * @param ignore True to ignore the peer, false to unignore the peer.
+ *
+ * @return true on success.
+ */
+bool tox_group_toggle_ignore(Tox *tox, uint32_t groupnumber, uint32_t peer_id, bool ignore,
+                             TOX_ERR_GROUP_TOGGLE_IGNORE *error);
+
+typedef enum TOX_ERR_GROUP_MOD_SET_ROLE {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_MOD_SET_ROLE_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_MOD_SET_ROLE_GROUP_NOT_FOUND,
+
+    /**
+     * The ID passed did not designate a valid peer. Note: you cannot set your own role.
+     */
+    TOX_ERR_GROUP_MOD_SET_ROLE_PEER_NOT_FOUND,
+
+    /**
+     * The caller does not have the required permissions for this action.
+     */
+    TOX_ERR_GROUP_MOD_SET_ROLE_PERMISSIONS,
+
+    /**
+     * The role assignment is invalid. This will occur if you try to set a peer's role to
+     * the role they already have.
+     */
+    TOX_ERR_GROUP_MOD_SET_ROLE_ASSIGNMENT,
+
+    /**
+     * The role was not successfully set. This may occur if something goes wrong with role setting,
+     * or if the packet fails to send.
+     */
+    TOX_ERR_GROUP_MOD_SET_ROLE_FAIL_ACTION,
+
+} TOX_ERR_GROUP_MOD_SET_ROLE;
+
+
+/**
+ * Set a peer's role.
+ *
+ * This function will first remove the peer's previous role and then assign them a new role.
+ * It will also send a packet to the rest of the group, requesting that they perform
+ * the role reassignment. Note: peers cannot be set to the founder role.
+ *
+ * @param groupnumber The group number of the group the in which you wish set the peer's role.
+ * @param peer_id The ID of the peer whose role you wish to set.
+ * @param role The role you wish to set the peer to.
+ *
+ * @return true on success.
+ */
+bool tox_group_mod_set_role(Tox *tox, uint32_t groupnumber, uint32_t peer_id, TOX_GROUP_ROLE role,
+                            TOX_ERR_GROUP_MOD_SET_ROLE *error);
+
+typedef enum TOX_ERR_GROUP_MOD_REMOVE_PEER {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_PEER_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_PEER_GROUP_NOT_FOUND,
+
+    /**
+     * The ID passed did not designate a valid peer.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_PEER_PEER_NOT_FOUND,
+
+    /**
+     * The caller does not have the required permissions for this action.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_PEER_PERMISSIONS,
+
+    /**
+     * The peer could not be removed from the group.
+     *
+     * If a ban was set, this error indicates that the ban entry could not be created.
+     * This is usually due to the peer's IP address already occurring in the ban list. It may also
+     * be due to the entry containing invalid peer information, or a failure to cryptographically
+     * authenticate the entry.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_PEER_FAIL_ACTION,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_PEER_FAIL_SEND,
+
+} TOX_ERR_GROUP_MOD_REMOVE_PEER;
+
+
+/**
+ * Kick/ban a peer.
+ *
+ * This function will remove a peer from the caller's peer list and optionally add their IP address
+ * to the ban list. It will also send a packet to all group members requesting them
+ * to do the same.
+ *
+ * @param groupnumber The group number of the group the ban is intended for.
+ * @param peer_id The ID of the peer who will be kicked and/or added to the ban list.
+ * @param set_ban Set to true if a ban shall be set on the peer's IP address.
+ *
+ * @return true on success.
+ */
+bool tox_group_mod_remove_peer(Tox *tox, uint32_t groupnumber, uint32_t peer_id, bool set_ban,
+                               TOX_ERR_GROUP_MOD_REMOVE_PEER *error);
+
+typedef enum TOX_ERR_GROUP_MOD_REMOVE_BAN {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_BAN_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_BAN_GROUP_NOT_FOUND,
+
+    /**
+     * The caller does not have the required permissions for this action.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_BAN_PERMISSIONS,
+
+    /**
+     * The ban entry could not be removed. This may occur if ban_id does not designate
+     * a valid ban entry.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_BAN_FAIL_ACTION,
+
+    /**
+     * The packet failed to send.
+     */
+    TOX_ERR_GROUP_MOD_REMOVE_BAN_FAIL_SEND,
+
+} TOX_ERR_GROUP_MOD_REMOVE_BAN;
+
+
+/**
+ * Removes a ban.
+ *
+ * This function removes a ban entry from the ban list, and sends a packet to the rest of
+ * the group requesting that they do the same.
+ *
+ * @param groupnumber The group number of the group in which the ban is to be removed.
+ * @param ban_id The ID of the ban entry that shall be removed.
+ *
+ * @return true on success
+ */
+bool tox_group_mod_remove_ban(Tox *tox, uint32_t groupnumber, uint32_t ban_id, TOX_ERR_GROUP_MOD_REMOVE_BAN *error);
+
+/**
+ * Represents moderation events. These should be used with the `group_moderation` event.
+ */
+typedef enum TOX_GROUP_MOD_EVENT {
+
+    /**
+     * A peer has been kicked from the group.
+     */
+    TOX_GROUP_MOD_EVENT_KICK,
+
+    /**
+     * A peer has been banned from the group.
+     */
+    TOX_GROUP_MOD_EVENT_BAN,
+
+    /**
+     * A peer as been given the observer role.
+     */
+    TOX_GROUP_MOD_EVENT_OBSERVER,
+
+    /**
+     * A peer has been given the user role.
+     */
+    TOX_GROUP_MOD_EVENT_USER,
+
+    /**
+     * A peer has been given the moderator role.
+     */
+    TOX_GROUP_MOD_EVENT_MODERATOR,
+
+} TOX_GROUP_MOD_EVENT;
+
+
+/**
+ * @param groupnumber The group number of the group the event is intended for.
+ * @param source_peer_number The ID of the peer who initiated the event.
+ * @param target_peer_number The ID of the peer who is the target of the event.
+ * @param mod_type The type of event.
+ */
+typedef void tox_group_moderation_cb(Tox *tox, uint32_t groupnumber, uint32_t source_peer_number,
+                                     uint32_t target_peer_number, TOX_GROUP_MOD_EVENT mod_type, void *user_data);
+
+
+/**
+ * Set the callback for the `group_moderation` event. Pass NULL to unset.
+ *
+ * This event is triggered when a moderator or founder executes a moderation event.
+ */
+void tox_callback_group_moderation(Tox *tox, tox_group_moderation_cb *callback, void *user_data);
+
+
+/*******************************************************************************
+ *
+ * :: Group chat ban list queries
+ *
+ ******************************************************************************/
+
+
+
+/**
+ * Error codes for group ban list queries.
+ */
+typedef enum TOX_ERR_GROUP_BAN_QUERY {
+
+    /**
+     * The function returned successfully.
+     */
+    TOX_ERR_GROUP_BAN_QUERY_OK,
+
+    /**
+     * The group number passed did not designate a valid group.
+     */
+    TOX_ERR_GROUP_BAN_QUERY_GROUP_NOT_FOUND,
+
+    /**
+     * The ban_id does not designate a valid ban list entry.
+     */
+    TOX_ERR_GROUP_BAN_QUERY_BAD_ID,
+
+} TOX_ERR_GROUP_BAN_QUERY;
+
+
+/**
+ * Return the number of entries in the ban list for the group designated by
+ * the given group number. If the group number is invalid, the return value is unspecified.
+ */
+size_t tox_group_ban_get_list_size(const Tox *tox, uint32_t groupnumber, TOX_ERR_GROUP_BAN_QUERY *error);
+
+/**
+ * Copy a list of valid ban list ID's into an array.
+ *
+ * Call tox_group_ban_get_list_size to determine the number of elements to allocate.
+ *
+ * @param list A memory region with enough space to hold the ban list. If
+ *   this parameter is NULL, this function has no effect.
+ *
+ * @return true on success.
+ */
+bool tox_group_ban_get_list(const Tox *tox, uint32_t groupnumber, uint32_t *list, TOX_ERR_GROUP_BAN_QUERY *error);
+
+/**
+ * Return the length of the name for the ban list entry designated by ban_id, in the
+ * group designated by the given group number. If either groupnumber or ban_id is invalid,
+ * the return value is unspecified.
+ */
+size_t tox_group_ban_get_name_size(const Tox *tox, uint32_t groupnumber, uint32_t ban_id,
+                                   TOX_ERR_GROUP_BAN_QUERY *error);
+
+/**
+ * Write the name of the ban entry designated by ban_id in the group designated by the
+ * given group number to a byte array.
+ *
+ * Call tox_group_ban_get_name_size to find out how much memory to allocate for the result.
+ *
+ * @return true on success.
+ */
+bool tox_group_ban_get_name(const Tox *tox, uint32_t groupnumber, uint32_t ban_id, uint8_t *name,
+                            TOX_ERR_GROUP_BAN_QUERY *error);
+
+/**
+ * Return a time stamp indicating the time the ban was set, for the ban list entry
+ * designated by ban_id, in the group designated by the given group number.
+ * If either groupnumber or ban_id is invalid, the return value is unspecified.
+ */
+uint64_t tox_group_ban_get_time_set(const Tox *tox, uint32_t groupnumber, uint32_t ban_id,
+                                    TOX_ERR_GROUP_BAN_QUERY *error);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+typedef TOX_ERR_OPTIONS_NEW Tox_Err_Options_New;
+typedef TOX_ERR_NEW Tox_Err_New;
+typedef TOX_ERR_BOOTSTRAP Tox_Err_Bootstrap;
+typedef TOX_ERR_SET_INFO Tox_Err_Set_Info;
+typedef TOX_ERR_FRIEND_ADD Tox_Err_Friend_Add;
+typedef TOX_ERR_FRIEND_DELETE Tox_Err_Friend_Delete;
+typedef TOX_ERR_FRIEND_BY_PUBLIC_KEY Tox_Err_Friend_By_Public_Key;
+typedef TOX_ERR_FRIEND_GET_PUBLIC_KEY Tox_Err_Friend_Get_Public_Key;
+typedef TOX_ERR_FRIEND_GET_LAST_ONLINE Tox_Err_Friend_Get_Last_Online;
+typedef TOX_ERR_FRIEND_QUERY Tox_Err_Friend_Query;
+typedef TOX_ERR_SET_TYPING Tox_Err_Set_Typing;
+typedef TOX_ERR_FRIEND_SEND_MESSAGE Tox_Err_Friend_Send_Message;
+typedef TOX_ERR_FILE_CONTROL Tox_Err_File_Control;
+typedef TOX_ERR_FILE_SEEK Tox_Err_File_Seek;
+typedef TOX_ERR_FILE_GET Tox_Err_File_Get;
+typedef TOX_ERR_FILE_SEND Tox_Err_File_Send;
+typedef TOX_ERR_FILE_SEND_CHUNK Tox_Err_File_Send_Chunk;
+typedef TOX_ERR_CONFERENCE_NEW Tox_Err_Conference_New;
+typedef TOX_ERR_CONFERENCE_DELETE Tox_Err_Conference_Delete;
+typedef TOX_ERR_CONFERENCE_PEER_QUERY Tox_Err_Conference_Peer_Query;
+typedef TOX_ERR_CONFERENCE_BY_ID Tox_Err_Conference_By_Id;
+typedef TOX_ERR_CONFERENCE_BY_UID Tox_Err_Conference_By_Uid;
+typedef TOX_ERR_CONFERENCE_INVITE Tox_Err_Conference_Invite;
+typedef TOX_ERR_CONFERENCE_JOIN Tox_Err_Conference_Join;
+typedef TOX_ERR_CONFERENCE_SEND_MESSAGE Tox_Err_Conference_Send_Message;
+typedef TOX_ERR_CONFERENCE_TITLE Tox_Err_Conference_Title;
+typedef TOX_ERR_CONFERENCE_GET_TYPE Tox_Err_Conference_Get_Type;
+typedef TOX_ERR_FRIEND_CUSTOM_PACKET Tox_Err_Friend_Custom_Packet;
+typedef TOX_ERR_GET_PORT Tox_Err_Get_Port;
+typedef TOX_USER_STATUS Tox_User_Status;
+typedef TOX_MESSAGE_TYPE Tox_Message_Type;
+typedef TOX_PROXY_TYPE Tox_Proxy_Type;
+typedef TOX_SAVEDATA_TYPE Tox_Savedata_Type;
+typedef TOX_LOG_LEVEL Tox_Log_Level;
+typedef TOX_CONNECTION Tox_Connection;
+typedef TOX_FILE_CONTROL Tox_File_Control;
+typedef TOX_CONFERENCE_TYPE Tox_Conference_Type;
+
+#endif /* TOX_H */
