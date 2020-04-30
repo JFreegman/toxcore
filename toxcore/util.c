@@ -236,3 +236,52 @@ uint32_t jenkins_one_at_a_time_hash(const uint8_t *key, size_t len)
     hash += (hash << 15);
     return hash;
 }
+
+/*
+ * Returns true if fuzz factor `f` is greater than a random int <= 100.
+ */
+bool fuzz_this_byte(unsigned short f)
+{
+    return random_int_range(101) <= f;
+}
+
+/*
+ * Fills `packet` with random data.
+ *
+ * @packet The packet to be fuzzed.
+ * @length The length of `packet`.
+ * @num_extra The number of extra bytes to append to `packet` if there is extra room.
+ * @max_size The size of the packet buffer.
+ * @start_len The offset of the packet where the fuzzing starts.
+ */
+uint32_t fuzz_packet(uint8_t *packet, uint32_t length, uint32_t num_extra, size_t max_size, size_t start_len)
+{
+    if (start_len >= length) {
+        fprintf(stderr, "Fail. Start_len: %zu, length: %u\n", start_len, length);
+        return 0;
+    }
+
+    unsigned short f = time(NULL) % 101;
+    uint32_t i, real_len = length;
+    size_t count = 0;
+
+    for (i = start_len; i < length; ++i) {
+        if (fuzz_this_byte(f)) {
+            packet[i] = rand();
+            ++count;
+        }
+    }
+
+    /* occasionally truncate a few bytes to test boundaries */
+    if (random_int_range(10) == 0)
+        return length - 1 - random_int_range(3);
+
+    for (i = length; i < num_extra && i < max_size; ++i) {
+        packet[i] = rand();
+        ++real_len;
+    }
+
+    fprintf(stderr, "Fuzzed %zu out of %lu bytes. Original len: %u, max len: %zu, started at: %zu\n", count, length - start_len, length, max_size, start_len);
+
+    return real_len;
+}

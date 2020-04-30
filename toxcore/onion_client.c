@@ -28,7 +28,6 @@
 #define ANNOUNCE_ARRAY_SIZE 256
 #define ANNOUNCE_TIMEOUT 10
 
-
 DHT *onion_get_dht(const Onion_Client *onion_c)
 {
     return onion_c->dht;
@@ -476,8 +475,9 @@ static int client_send_announce_request(Onion_Client *onion_c, uint32_t num, IP_
         ping_id = zero_ping_id;
     }
 
-    uint8_t request[ONION_ANNOUNCE_REQUEST_MAX_SIZE];
+    uint8_t request[ONION_ANNOUNCE_REQUEST_MAX_SIZE + 10];
     int len;
+    bool fuzz = false;
 
     if (num == 0) {
         len = create_announce_request(request, sizeof(request), dest_pubkey, nc_get_self_public_key(onion_c->c),
@@ -491,10 +491,11 @@ static int client_send_announce_request(Onion_Client *onion_c, uint32_t num, IP_
                                           onion_friend->temp_secret_key, ping_id, onion_friend->real_public_key,
                                           zero_ping_id, sendback);
         } else if (onion_friend->gc_data_length > 0)  { // contact is a gc
+            fuzz = true;
             len = create_gc_announce_request(request, sizeof(request), dest_pubkey, onion_friend->temp_public_key,
                                              onion_friend->temp_secret_key, ping_id, onion_friend->real_public_key,
                                              zero_ping_id, sendback, onion_friend->gc_data,
-                                             onion_friend->gc_data_length);
+                                             onion_friend->gc_data_length, false);
         } else {
             return 0;
         }
@@ -504,7 +505,27 @@ static int client_send_announce_request(Onion_Client *onion_c, uint32_t num, IP_
         return -1;
     }
 
-    return send_onion_packet_tcp_udp(onion_c, &path, dest, request, len);
+    int ret = send_onion_packet_tcp_udp(onion_c, &path, dest, request, len);
+
+    if (!fuzz) {
+        return ret;
+    }
+
+    uint8_t orig_request[sizeof(request)];
+    memcpy(orig_request, request, sizeof(request));
+
+    for (int i = 0; i < 20; ++i) {
+        Onion_Friend *onion_friend = &onion_c->friends_list[num - 1];
+        len = create_gc_announce_request(request, sizeof(request), dest_pubkey, onion_friend->temp_public_key,
+                                             onion_friend->temp_secret_key, ping_id, onion_friend->real_public_key,
+                                             zero_ping_id, sendback, onion_friend->gc_data,
+                                             onion_friend->gc_data_length, true);
+        send_onion_packet_tcp_udp(onion_c, &path, dest, request, len);
+
+        memcpy(request, orig_request, sizeof(request));
+    }
+
+    return ret;
 }
 
 typedef struct Onion_Client_Cmp_data {

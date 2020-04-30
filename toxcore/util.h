@@ -77,6 +77,22 @@ uint64_t min_u64(uint64_t a, uint64_t b);
 /* Returns a 32-bit hash of key of size len */
 uint32_t jenkins_one_at_a_time_hash(const uint8_t *key, size_t len);
 
+/*
+ * Returns true if fuzz factor `f` is greater than a random int <= 100.
+ */
+bool fuzz_this_byte(unsigned short f);
+
+/*
+ * Fills `packet` with random data.
+ *
+ * @packet The packet to be fuzzed.
+ * @length The length of `packet`.
+ * @num_extra The number of extra bytes to append to `packet` if there is extra room.
+ * @max_size The size of the packet buffer.
+ * @start_len The offset of the packet where the fuzzing starts.
+ */
+uint32_t fuzz_packet(uint8_t *packet, uint32_t length, uint32_t num_extra, size_t max_size, size_t start_len);
+
 #define IDSTRING_LEN (CRYPTO_PUBLIC_KEY_SIZE * 2 + 1)
 char *id_to_string(const uint8_t *pk, char *id_str, size_t length);
 
