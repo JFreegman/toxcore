@@ -3048,3 +3048,4 @@ int ipport_self_copy(const DHT *dht, IP_Port *dest)
 
     return 0;
 }
+
