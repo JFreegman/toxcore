@@ -22,13 +22,7 @@
 #include <string.h>
 #include <time.h>
 
-// Need dht because of ENC_SECRET_KEY_SIZE and ENC_PUBLIC_KEY_SIZE
-#define ENC_PUBLIC_KEY_SIZE CRYPTO_PUBLIC_KEY_SIZE
-#define ENC_SECRET_KEY_SIZE CRYPTO_SECRET_KEY_SIZE
-#define SIG_PUBLIC_KEY_SIZE CRYPTO_SIGN_PUBLIC_KEY_SIZE
-#define SIG_SECRET_KEY_SIZE CRYPTO_SIGN_SECRET_KEY_SIZE
-#define CHAT_ID_SIZE SIG_PUBLIC_KEY_SIZE
-
+#include "DHT.h"  /* for group public key sizes */
 #include "crypto_core.h" /* for CRYPTO_PUBLIC_KEY_SIZE */
 #include "network.h" /* for current_time_monotonic */
 
