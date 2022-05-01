@@ -35,7 +35,7 @@ static bool load_unpack_state_values(GC_Chat *chat, Bin_Unpack *bu)
             && bin_unpack_u16(bu, &chat->shared_state.group_name_len)
             && bin_unpack_u08(bu, &privacy_state)
             && bin_unpack_u16(bu, &chat->shared_state.maxpeers)
-            && bin_unpack_u16(bu, &chat->shared_state.password_length)
+            && bin_unpack_bool(bu, &chat->shared_state.has_passkey)
             && bin_unpack_u32(bu, &chat->shared_state.version)
             && bin_unpack_u32(bu, &chat->shared_state.topic_lock)
             && bin_unpack_u08(bu, &voice_state))) {
@@ -61,7 +61,7 @@ static bool load_unpack_state_bin(GC_Chat *chat, Bin_Unpack *bu)
     if (!(bin_unpack_bin_fixed(bu, chat->shared_state_sig, SIGNATURE_SIZE)
             && bin_unpack_bin_fixed(bu, chat->shared_state.founder_public_key, EXT_PUBLIC_KEY_SIZE)
             && bin_unpack_bin_fixed(bu, chat->shared_state.group_name, chat->shared_state.group_name_len)
-            && bin_unpack_bin_fixed(bu, chat->shared_state.password, chat->shared_state.password_length)
+            && bin_unpack_bin_fixed(bu, chat->shared_state.passkey, GC_PASSKEY_SIZE)
             && bin_unpack_bin_fixed(bu, chat->shared_state.mod_list_hash, MOD_MODERATION_HASH_SIZE))) {
         LOGGER_ERROR(chat->log, "Failed to unpack state binary data");
         return false;
@@ -271,7 +271,7 @@ static void save_pack_state_values(const GC_Chat *chat, Bin_Pack *bp)
     bin_pack_u16(bp, chat->shared_state.group_name_len); // 2
     bin_pack_u08(bp, chat->shared_state.privacy_state); // 3
     bin_pack_u16(bp, chat->shared_state.maxpeers); // 4
-    bin_pack_u16(bp, chat->shared_state.password_length); // 5
+    bin_pack_bool(bp, chat->shared_state.has_passkey); // 5
     bin_pack_u32(bp, chat->shared_state.version); // 6
     bin_pack_u32(bp, chat->shared_state.topic_lock); // 7
     bin_pack_u08(bp, chat->shared_state.voice_state); // 8
@@ -285,7 +285,7 @@ static void save_pack_state_bin(const GC_Chat *chat, Bin_Pack *bp)
     bin_pack_bin(bp, chat->shared_state_sig, SIGNATURE_SIZE); // 1
     bin_pack_bin(bp, chat->shared_state.founder_public_key, EXT_PUBLIC_KEY_SIZE); // 2
     bin_pack_bin(bp, chat->shared_state.group_name, chat->shared_state.group_name_len); // 3
-    bin_pack_bin(bp, chat->shared_state.password, chat->shared_state.password_length); // 4
+    bin_pack_bin(bp, chat->shared_state.passkey, GC_PASSKEY_SIZE); // 4
     bin_pack_bin(bp, chat->shared_state.mod_list_hash, MOD_MODERATION_HASH_SIZE); // 5
 }
 

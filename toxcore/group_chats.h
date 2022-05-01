@@ -432,9 +432,8 @@ int gc_set_peer_role(const Messenger *m, int group_number, uint32_t peer_id, Gro
  *
  * Returns 0 on success.
  * Returns -1 if the caller does not have sufficient permissions for the action.
- * Returns -2 if the password is too long.
+ * Returns -2 if the key derivation function failed on the password. Probably out of memory.
  * Returns -3 if the packet failed to send.
- * Returns -4 if malloc failed.
  */
 non_null(1) nullable(2)
 int gc_founder_set_password(GC_Chat *chat, const uint8_t *password, uint16_t password_length);

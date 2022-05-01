@@ -102,21 +102,12 @@ static void group_peer_limit_handler(Tox *tox, uint32_t groupnumber, uint32_t pe
                   "Peer limits don't match in callback: %u, %u\n", peer_limit, current_plimit);
 }
 
-static void group_password_handler(Tox *tox, uint32_t groupnumber, const uint8_t *password, size_t length,
+static void group_password_handler(Tox *tox, uint32_t group_number, Tox_Group_Password_Status status,
                                    void *user_data)
 {
+    /* TODO: test this callback */
     Tox_Err_Group_State_Queries err;
-    size_t curr_pwlength = tox_group_get_password_size(tox, groupnumber, &err);
 
-    ck_assert(err == TOX_ERR_GROUP_STATE_QUERIES_OK);
-    ck_assert(length == curr_pwlength);
-
-    uint8_t current_password[TOX_GROUP_MAX_PASSWORD_SIZE];
-    tox_group_get_password(tox, groupnumber, current_password, &err);
-
-    ck_assert(err == TOX_ERR_GROUP_STATE_QUERIES_OK);
-    ck_assert_msg(memcmp(current_password, password, length) == 0,
-                  "Passwords don't match: %s, %s", password, current_password);
 }
 
 static void group_peer_join_handler(Tox *tox, uint32_t group_number, uint32_t peer_id, void *user_data)
@@ -151,26 +142,6 @@ static int check_group_state(const Tox *tox, uint32_t groupnumber, uint32_t peer
 
     if (my_peer_limit != peer_limit) {
         return -2;
-    }
-
-    size_t my_pass_len = tox_group_get_password_size(tox, groupnumber, &query_err);
-    ck_assert_msg(query_err == TOX_ERR_GROUP_STATE_QUERIES_OK, "Failed to get password size: %d", query_err);
-
-    if (my_pass_len != pass_len) {
-        return -5;
-    }
-
-    if (password != nullptr && my_pass_len > 0) {
-        ck_assert(my_pass_len <= TOX_GROUP_MAX_PASSWORD_SIZE);
-
-        uint8_t my_pass[TOX_GROUP_MAX_PASSWORD_SIZE];
-        tox_group_get_password(tox, groupnumber, my_pass, &query_err);
-        my_pass[my_pass_len] = 0;
-        ck_assert_msg(query_err == TOX_ERR_GROUP_STATE_QUERIES_OK, "Failed to get password: %d", query_err);
-
-        if (memcmp(my_pass, password, my_pass_len) != 0) {
-            return -6;
-        }
     }
 
     /* Group name should never change */

@@ -21,7 +21,10 @@
 #define MAX_GC_TOPIC_SIZE 512
 #define MAX_GC_GROUP_NAME_SIZE 48
 #define MAX_GC_MESSAGE_SIZE 1372
-#define MAX_GC_PASSWORD_SIZE 32
+
+/* The number of bytes in a passkey for protected groups */
+#define GC_PASSKEY_SIZE 32
+
 #define MAX_GC_SAVED_INVITES 10
 #define MAX_GC_PEERS_DEFAULT 100
 #define MAX_GC_SAVED_TIMEOUTS 12
@@ -54,6 +57,12 @@ typedef enum Group_Exit_Type {
     GC_EXIT_TYPE_SYNC_ERR          = 0x05,  // Peer failed to sync with the group
     GC_EXIT_TYPE_NO_CALLBACK       = 0x06,  // The peer exit callback should not be triggered
 } Group_Exit_Type;
+
+/** Group password change type. */
+typedef enum Group_Password_Change_Type {
+    Group_Password_Change_Type_Changed = 0x00,  // Password was changed
+    Group_Password_Change_Type_Removed = 0x01,  // Password was removed
+} Group_Password_Change_Type;
 
 typedef struct GC_Exit_Info {
     uint8_t  part_message[MAX_GC_PART_MESSAGE_SIZE];
@@ -214,8 +223,8 @@ typedef struct GC_SharedState {
     uint16_t    group_name_len;
     uint8_t     group_name[MAX_GC_GROUP_NAME_SIZE];
     Group_Privacy_State privacy_state;   // GI_PUBLIC (uses DHT) or GI_PRIVATE (invite only)
-    uint16_t    password_length;
-    uint8_t     password[MAX_GC_PASSWORD_SIZE];
+    bool        has_passkey;
+    uint8_t     passkey[CRYPTO_HMAC_SIZE];
     uint8_t     mod_list_hash[MOD_MODERATION_HASH_SIZE];
     uint32_t    topic_lock; // non-zero value when lock is enabled
     Group_Voice_State voice_state;
@@ -323,7 +332,7 @@ typedef void gc_topic_lock_cb(const Messenger *m, uint32_t group_number, unsigne
 typedef void gc_voice_state_cb(const Messenger *m, uint32_t group_number, unsigned int voice_state, void *user_data);
 typedef void gc_peer_limit_cb(const Messenger *m, uint32_t group_number, uint32_t max_peers, void *user_data);
 typedef void gc_privacy_state_cb(const Messenger *m, uint32_t group_number, unsigned int state, void *user_data);
-typedef void gc_password_cb(const Messenger *m, uint32_t group_number, const uint8_t *data, size_t length,
+typedef void gc_password_cb(const Messenger *m, uint32_t group_number, Group_Password_Change_Type password_change,
                             void *user_data);
 typedef void gc_peer_join_cb(const Messenger *m, uint32_t group_number, uint32_t peer_id, void *user_data);
 typedef void gc_peer_exit_cb(const Messenger *m, uint32_t group_number, uint32_t peer_id, unsigned int exit_type,

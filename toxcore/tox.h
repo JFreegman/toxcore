@@ -4276,35 +4276,29 @@ typedef void tox_group_peer_limit_cb(Tox *tox, uint32_t group_number, uint32_t p
 void tox_callback_group_peer_limit(Tox *tox, tox_group_peer_limit_cb *callback);
 
 /**
- * Return the length of the group password. If the group number is invalid, the
- * return value is unspecified.
+ * Status codes for group password updates.
  */
-size_t tox_group_get_password_size(const Tox *tox, uint32_t group_number, Tox_Err_Group_State_Queries *error);
+typedef enum Tox_Group_Password_Status {
 
-/**
- * Write the password for the group designated by the given group number to a byte array.
- *
- * Call tox_group_get_password_size to determine the allocation size for the `password` parameter.
- *
- * The data received is equal to the data received by the last
- * `group_password` callback.
- *
- * @see the `Group chat founder controls` section for the respective set function.
- *
- * @param password A valid memory region large enough to store the group password.
- *   If this parameter is NULL, this function call has no effect.
- *
- * @return true on success.
- */
-bool tox_group_get_password(const Tox *tox, uint32_t group_number, uint8_t *password,
-                            Tox_Err_Group_State_Queries *error);
+    /**
+     * A password for the group was set or changed.
+     */
+    TOX_GROUP_PASSWORD_STATUS_CHANGED,
+
+    /**
+     * The password was removed from the group.
+     */
+    TOX_GROUP_PASSWORD_STATUS_REMOVED,
+
+} Tox_Group_Password_Status;
+
 
 /**
  * @param group_number The group number of the group for which the password has changed.
  * @param password The new group password.
  * @param length The length of the password.
  */
-typedef void tox_group_password_cb(Tox *tox, uint32_t group_number, const uint8_t *password, size_t length,
+typedef void tox_group_password_cb(Tox *tox, uint32_t group_number, Tox_Group_Password_Status status,
                                    void *user_data);
 
 

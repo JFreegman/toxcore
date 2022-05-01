@@ -438,13 +438,15 @@ static void tox_group_privacy_state_handler(const Messenger *m, uint32_t group_n
 }
 
 non_null(1) nullable(3, 5)
-static void tox_group_password_handler(const Messenger *m, uint32_t group_number, const uint8_t *password,
-                                       size_t length, void *user_data)
+static void tox_group_password_handler(const Messenger *m, uint32_t group_number, Group_Password_Change_Type password_change,
+                                       void *user_data)
 {
     struct Tox_Userdata *tox_data = (struct Tox_Userdata *)user_data;
 
+    Tox_Group_Password_Status status = password_change == Group_Password_Change_Type_Removed ? TOX_GROUP_PASSWORD_STATUS_REMOVED : TOX_GROUP_PASSWORD_STATUS_CHANGED;
+
     if (tox_data->tox->group_password_callback != nullptr) {
-        tox_data->tox->group_password_callback(tox_data->tox, group_number, password, length, tox_data->user_data);
+        tox_data->tox->group_password_callback(tox_data->tox, group_number, status, tox_data->user_data);
     }
 }
 
@@ -3758,49 +3760,6 @@ uint16_t tox_group_get_peer_limit(const Tox *tox, uint32_t group_number, Tox_Err
     tox_unlock(tox);
 
     return ret;
-}
-
-size_t tox_group_get_password_size(const Tox *tox, uint32_t group_number, Tox_Err_Group_State_Queries *error)
-{
-    assert(tox != nullptr);
-
-    tox_lock(tox);
-    const GC_Chat *chat = gc_get_group(tox->m->group_handler, group_number);
-
-    if (chat == nullptr) {
-        SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_STATE_QUERIES_GROUP_NOT_FOUND);
-        tox_unlock(tox);
-        return -1;
-    }
-
-    SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_STATE_QUERIES_OK);
-
-    const size_t ret = gc_get_password_size(chat);
-    tox_unlock(tox);
-
-    return ret;
-}
-
-bool tox_group_get_password(const Tox *tox, uint32_t group_number, uint8_t *password,
-                            Tox_Err_Group_State_Queries *error)
-{
-    assert(tox != nullptr);
-
-    tox_lock(tox);
-    const GC_Chat *chat = gc_get_group(tox->m->group_handler, group_number);
-
-    if (chat == nullptr) {
-        SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_STATE_QUERIES_GROUP_NOT_FOUND);
-        tox_unlock(tox);
-        return false;
-    }
-
-    SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_STATE_QUERIES_OK);
-
-    gc_get_password(chat, password);
-    tox_unlock(tox);
-
-    return true;
 }
 
 bool tox_group_send_message(const Tox *tox, uint32_t group_number, Tox_Message_Type type, const uint8_t *message,
