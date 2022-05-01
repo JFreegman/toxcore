@@ -61,17 +61,6 @@ static int has_correct_group_state(const Tox *tox, uint32_t group_number, const 
         return -1;
     }
 
-    size_t pass_len = tox_group_get_password_size(tox, group_number, &query_err);
-    ck_assert(query_err == TOX_ERR_GROUP_STATE_QUERIES_OK);
-
-    uint8_t password[TOX_GROUP_MAX_PASSWORD_SIZE];
-    tox_group_get_password(tox, group_number, password, &query_err);
-    ck_assert(query_err == TOX_ERR_GROUP_STATE_QUERIES_OK);
-
-    if (pass_len != PASS_LEN || memcmp(password, PASSWORD, pass_len) != 0) {
-        return -2;
-    }
-
     size_t gname_len = tox_group_get_name_size(tox, group_number, &query_err);
     ck_assert(query_err == TOX_ERR_GROUP_STATE_QUERIES_OK);
 

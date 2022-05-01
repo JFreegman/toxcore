@@ -41,7 +41,7 @@
 
 /* Size of a group's shared state in packed format */
 #define GC_PACKED_SHARED_STATE_SIZE (EXT_PUBLIC_KEY_SIZE + sizeof(uint16_t) + MAX_GC_GROUP_NAME_SIZE +\
-                                     sizeof(uint16_t) + 1 + sizeof(uint16_t) + MAX_GC_PASSWORD_SIZE +\
+                                     sizeof(uint16_t) + 1 + 1 + GC_PASSKEY_SIZE +\
                                      MOD_MODERATION_HASH_SIZE + sizeof(uint32_t) + sizeof(uint32_t) + 1)
 
 /* Minimum size of a topic packet; includes topic length, public signature key, topic version and checksum */
@@ -156,6 +156,50 @@ non_null() static size_t load_gc_peers(GC_Chat *chat, const GC_SavedPeerInfo *ad
 non_null() static bool saved_peer_is_valid(const GC_SavedPeerInfo *saved_peer);
 
 static const GC_Chat empty_gc_chat = {nullptr};
+static const uint8_t empty_passkey[GC_PASSKEY_SIZE] = {0};
+
+
+/* We re-use the Group ID as salt for the password, if this condition is violated and out-of-bounds read happens */
+static_assert(EXT_PUBLIC_KEY_SIZE >= crypto_pwhash_scryptsalsa208sha256_SALTBYTES,
+"EXT_PUBLIC_KEY_SIZE must be >= crypto_pwhash_scryptsalsa208sha256_SALTBYTES");
+
+/**
+ * Derives the passkey from a password.
+ *
+ * @param gc The group this passkey is generated for.
+ * @param password The user-provided password. Can be empty and should be overwritten after this function as soon as possible.
+ * @param password_len The length of the password.
+ * @param passkey The derived passkey.
+ * @note The group public id is used as a salt, to derive different passkeys for different groups even if the passwords match.
+ *
+ * @return true on success.
+ */
+static bool gc_derive_passkey(GC_Chat *gc, const uint8_t *passphrase, size_t passphrase_len, uint8_t passkey[GC_PASSKEY_SIZE])
+{
+    if (gc == nullptr ||
+        (passphrase == nullptr && passphrase_len != 0) ||
+        passkey == nullptr) {
+        return false;
+    }
+
+    // similar code as toxencryptsave tox_pass_key_derive_with_salt(...)
+    if (crypto_pwhash_scryptsalsa208sha256(
+                passkey, GC_PASSKEY_SIZE,
+                (char *)passphrase, sizeof(passphrase_len),
+                gc->chat_public_key,
+                crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE * 2, /* slightly stronger */
+                crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE) != 0) {
+        /* out of memory most likely */
+        return false;
+    }
+
+    return true;
+}
+
+static void disable_passkey(GC_SharedState *gc_shared) {
+    gc_shared->has_passkey = false;
+    crypto_memzero(gc_shared->passkey, GC_PASSKEY_SIZE);
+}
 
 uint16_t gc_get_wrapped_packet_size(uint16_t length, Net_Packet_Type packet_type)
 {
@@ -476,22 +520,20 @@ static bool is_public_chat(const GC_Chat *chat)
 non_null()
 static bool chat_is_password_protected(const GC_Chat *chat)
 {
-    return chat->shared_state.password_length > 0;
+    return chat->shared_state.has_passkey;
 }
 
-/** Returns true if `password` matches the current group password. */
+/** Returns true if `passkey` matches the current group password.
+ * @note Will return false if the chat has no passkey set.
+ */
 non_null()
-static bool validate_password(const GC_Chat *chat, const uint8_t *password, uint16_t length)
+static bool validate_passkey(const GC_Chat *chat, const uint8_t passkey[GC_PASSKEY_SIZE])
 {
-    if (length > MAX_GC_PASSWORD_SIZE) {
+    if (!chat->shared_state.has_passkey) {
         return false;
     }
 
-    if (length != chat->shared_state.password_length) {
-        return false;
-    }
-
-    return memcmp(chat->shared_state.password, password, length) == 0;
+    return memcmp(chat->shared_state.passkey, passkey, GC_PASSKEY_SIZE) == 0;
 }
 
 /** @brief Returns the chat object that contains a peer with a public key equal to `id`.
@@ -685,22 +727,16 @@ static uint32_t get_new_peer_id(const GC_Chat *chat)
  * Return true on success.
  */
 non_null(1) nullable(2)
-static bool set_gc_password_local(GC_Chat *chat, const uint8_t *passwd, uint16_t length)
+static bool set_gc_password_local(GC_Chat *chat, const uint8_t *passwd, size_t length)
 {
-    if (length > MAX_GC_PASSWORD_SIZE) {
-        return false;
-    }
 
     if (passwd == nullptr || length == 0) {
-        chat->shared_state.password_length = 0;
-        memset(chat->shared_state.password, 0, MAX_GC_PASSWORD_SIZE);
-    } else {
-        chat->shared_state.password_length = length;
-        crypto_memlock(chat->shared_state.password, sizeof(chat->shared_state.password));
-        memcpy(chat->shared_state.password, passwd, length);
+        disable_passkey(&chat->shared_state);
+        return true;
     }
 
-    return true;
+    chat->shared_state.has_passkey = true;
+    return gc_derive_passkey(chat, passwd, length, chat->shared_state.passkey);
 }
 
 /** @brief Sets the local shared state to `version`.
@@ -1187,10 +1223,9 @@ static uint16_t pack_gc_shared_state(uint8_t *data, uint16_t length, const GC_Sh
     packed_len += MAX_GC_GROUP_NAME_SIZE;
     memcpy(data + packed_len, &privacy_state, sizeof(uint8_t));
     packed_len += sizeof(uint8_t);
-    net_pack_u16(data + packed_len, shared_state->password_length);
-    packed_len += sizeof(uint16_t);
-    memcpy(data + packed_len, shared_state->password, MAX_GC_PASSWORD_SIZE);
-    packed_len += MAX_GC_PASSWORD_SIZE;
+    packed_len += net_pack_bool(data + packed_len, shared_state->has_passkey);
+    memcpy(data + packed_len, shared_state->passkey, GC_PASSKEY_SIZE);
+    packed_len += GC_PASSKEY_SIZE;
     memcpy(data + packed_len, shared_state->mod_list_hash, MOD_MODERATION_HASH_SIZE);
     packed_len += MOD_MODERATION_HASH_SIZE;
     net_pack_u32(data + packed_len, shared_state->topic_lock);
@@ -1234,10 +1269,9 @@ static uint16_t unpack_gc_shared_state(GC_SharedState *shared_state, const uint8
     memcpy(&privacy_state, data + len_processed, sizeof(uint8_t));
     len_processed += sizeof(uint8_t);
 
-    net_unpack_u16(data + len_processed, &shared_state->password_length);
-    len_processed += sizeof(uint16_t);
-    memcpy(shared_state->password, data + len_processed, MAX_GC_PASSWORD_SIZE);
-    len_processed += MAX_GC_PASSWORD_SIZE;
+    len_processed += net_unpack_bool(data + len_processed, &shared_state->has_passkey);
+    memcpy(shared_state->passkey, data + len_processed, GC_PASSKEY_SIZE);
+    len_processed += GC_PASSKEY_SIZE;
     memcpy(shared_state->mod_list_hash, data + len_processed, MOD_MODERATION_HASH_SIZE);
     len_processed += MOD_MODERATION_HASH_SIZE;
     net_unpack_u32(data + len_processed, &shared_state->topic_lock);
@@ -1605,17 +1639,14 @@ static bool send_gc_sync_request(GC_Chat *chat, GC_Connection *gconn, uint16_t s
 
     chat->last_sync_request = mono_time_get(chat->mono_time);
 
-    uint8_t data[(sizeof(uint16_t) * 2) + MAX_GC_PASSWORD_SIZE];
+    uint8_t data[sizeof(uint16_t) + GC_PASSKEY_SIZE];
     uint16_t length = sizeof(uint16_t);
 
     net_pack_u16(data, sync_flags);
 
     if (chat_is_password_protected(chat)) {
-        net_pack_u16(data + length, chat->shared_state.password_length);
-        length += sizeof(uint16_t);
-
-        memcpy(data + (sizeof(uint16_t) * 2), chat->shared_state.password, MAX_GC_PASSWORD_SIZE);
-        length += MAX_GC_PASSWORD_SIZE;
+        memcpy(data + sizeof(uint16_t), chat->shared_state.passkey, GC_PASSKEY_SIZE);
+        length += GC_PASSKEY_SIZE;
     }
 
     return send_lossless_group_packet(chat, gconn, data, length, GP_SYNC_REQUEST);
@@ -1943,16 +1974,16 @@ static int handle_gc_sync_request(const GC_Chat *chat, uint32_t peer_number, con
     net_unpack_u16(data, &sync_flags);
 
     if (chat_is_password_protected(chat)) {
-        if (length < (sizeof(uint16_t) * 2) + MAX_GC_PASSWORD_SIZE) {
+        if (length < sizeof(uint16_t) + sizeof(uint8_t) + GC_PASSKEY_SIZE) {
             return -2;
         }
 
-        uint16_t password_length;
-        net_unpack_u16(data + sizeof(uint16_t), &password_length);
+        bool has_passkey;
+        net_unpack_bool(data + sizeof (uint16_t), &has_passkey);
 
-        const uint8_t *password = data + (sizeof(uint16_t) * 2);
+        const uint8_t *passkey = data + sizeof(uint16_t) + sizeof (uint8_t);
 
-        if (!validate_password(chat, password, password_length)) {
+        if (!validate_passkey(chat, passkey) || !has_passkey) {
             LOGGER_DEBUG(chat->log, "Invalid password");
             return -2;
         }
@@ -2058,14 +2089,13 @@ non_null()
 static bool send_gc_invite_request(const GC_Chat *chat, GC_Connection *gconn)
 {
     uint16_t length = 0;
-    uint8_t data[sizeof(uint16_t) + MAX_GC_PASSWORD_SIZE];
+    uint8_t data[sizeof(uint16_t) + GC_PASSKEY_SIZE];
 
     if (chat_is_password_protected(chat)) {
-        net_pack_u16(data, chat->shared_state.password_length);
-        length += sizeof(uint16_t);
+        length += net_pack_bool(data, chat->shared_state.has_passkey);
 
-        memcpy(data + length, chat->shared_state.password, MAX_GC_PASSWORD_SIZE);
-        length += MAX_GC_PASSWORD_SIZE;
+        memcpy(data + length, chat->shared_state.passkey, GC_PASSKEY_SIZE);
+        length += GC_PASSKEY_SIZE;
     }
 
     return send_lossless_group_packet(chat, gconn, data, length, GP_INVITE_REQUEST);
@@ -2177,16 +2207,16 @@ static int handle_gc_invite_request(GC_Chat *chat, GC_Connection *gconn, const u
         invite_error = GJ_INVALID_PASSWORD;
         ret = -2;
 
-        if (length < sizeof(uint16_t) + MAX_GC_PASSWORD_SIZE) {
+        if (length < sizeof(uint16_t) + GC_PASSKEY_SIZE) {
             goto FAILED_INVITE;
         }
 
-        uint16_t password_length;
-        net_unpack_u16(data, &password_length);
+        bool has_passkey;
+        net_unpack_bool(data, &has_passkey);
 
-        const uint8_t *password = data + sizeof(uint16_t);
+        const uint8_t *passkey = data + sizeof(uint8_t);
 
-        if (!validate_password(chat, password, password_length)) {
+        if (!validate_passkey(chat, passkey)) {
             goto FAILED_INVITE;
         }
     }
@@ -2516,7 +2546,7 @@ static bool send_self_to_peer(const GC_Chat *chat, GC_Connection *gconn)
 
     copy_self(chat, self);
 
-    const uint16_t data_size = PACKED_GC_PEER_SIZE + sizeof(uint16_t) + MAX_GC_PASSWORD_SIZE;
+    const uint16_t data_size = PACKED_GC_PEER_SIZE + sizeof(uint8_t) + GC_PASSKEY_SIZE;
     uint8_t *data = (uint8_t *)malloc(data_size);
 
     if (data == nullptr) {
@@ -2527,11 +2557,10 @@ static bool send_self_to_peer(const GC_Chat *chat, GC_Connection *gconn)
     uint16_t length = 0;
 
     if (chat_is_password_protected(chat)) {
-        net_pack_u16(data, chat->shared_state.password_length);
-        length += sizeof(uint16_t);
+        length += net_pack_bool(data, chat->shared_state.has_passkey);
 
-        memcpy(data + sizeof(uint16_t), chat->shared_state.password, MAX_GC_PASSWORD_SIZE);
-        length += MAX_GC_PASSWORD_SIZE;
+        memcpy(data + sizeof(uint8_t), chat->shared_state.passkey, GC_PASSKEY_SIZE);
+        length += GC_PASSKEY_SIZE;
     }
 
     const int packed_len = pack_gc_peer(data + length, data_size - length, self);
@@ -2637,19 +2666,18 @@ static int handle_gc_peer_info_response(const GC_Session *c, GC_Chat *chat, uint
     uint16_t unpacked_len = 0;
 
     if (chat_is_password_protected(chat)) {
-        if (length < sizeof(uint16_t) + MAX_GC_PASSWORD_SIZE) {
+        if (length < sizeof(uint8_t) + GC_PASSKEY_SIZE) {
             return -5;
         }
 
-        uint16_t password_length;
-        net_unpack_u16(data, &password_length);
-        unpacked_len += sizeof(uint16_t);
+        bool has_passkey;
+        unpacked_len += net_unpack_bool(data, &has_passkey);;
 
-        if (!validate_password(chat, data + unpacked_len, password_length)) {
+        if (!validate_passkey(chat, data + unpacked_len)) {
             return -5;
         }
 
-        unpacked_len += MAX_GC_PASSWORD_SIZE;
+        unpacked_len += GC_PASSKEY_SIZE;
     }
 
     if (length <= unpacked_len) {
@@ -2777,13 +2805,13 @@ static void do_gc_shared_state_changes(const GC_Session *c, GC_Chat *chat, const
         do_privacy_state_change(c, chat, userdata);
     }
 
-    /* password changed */
-    if (chat->shared_state.password_length != old_shared_state->password_length
-            || memcmp(chat->shared_state.password, old_shared_state->password, old_shared_state->password_length) != 0) {
+    /* passkey changed or removed */
+    if (memcmp(chat->shared_state.passkey, old_shared_state->passkey, GC_PASSKEY_SIZE) != 0 ||
+        chat->shared_state.has_passkey != old_shared_state->has_passkey) {
 
         if (c->password != nullptr) {
-            c->password(c->messenger, chat->group_number, chat->shared_state.password,
-                        chat->shared_state.password_length, userdata);
+            const Group_Password_Change_Type status = chat->shared_state.has_passkey ? Group_Password_Change_Type_Changed : Group_Password_Change_Type_Removed;
+            c->password(c->messenger, chat->group_number, status, userdata);
         }
     }
 
@@ -2815,12 +2843,23 @@ static bool send_gc_random_sync_request(GC_Chat *chat, uint16_t sync_flags)
     return send_gc_sync_request(chat, rand_gconn, sync_flags);
 }
 
+static bool validate_gc_passkey(const GC_SharedState *state)
+{
+    if (state->has_passkey) {
+        /* All passkey values are valid */
+        return true;
+    } else {
+        /* Passkey value must be zeroed */
+        return memcmp(state->passkey, empty_passkey, GC_PASSKEY_SIZE) == 0;
+    }
+}
+
 /** @brief Returns true if all shared state values are legal. */
 non_null()
 static bool validate_gc_shared_state(const GC_SharedState *state)
 {
     return state->maxpeers > 0
-           && state->password_length <= MAX_GC_PASSWORD_SIZE
+           && validate_gc_passkey(state)
            && state->group_name_len > 0
            && state->group_name_len <= MAX_GC_GROUP_NAME_SIZE
            && state->privacy_state <= GI_PRIVATE
@@ -3929,49 +3968,32 @@ uint16_t gc_get_group_name_size(const GC_Chat *chat)
     return chat->shared_state.group_name_len;
 }
 
-void gc_get_password(const GC_Chat *chat, uint8_t *password)
-{
-    if (password != nullptr) {
-        memcpy(password, chat->shared_state.password, chat->shared_state.password_length);
-    }
-}
-
-uint16_t gc_get_password_size(const GC_Chat *chat)
-{
-    return chat->shared_state.password_length;
-}
-
 int gc_founder_set_password(GC_Chat *chat, const uint8_t *password, uint16_t password_length)
 {
     if (!self_gc_is_founder(chat)) {
         return -1;
     }
 
-    uint8_t *oldpasswd = nullptr;
-    const uint16_t oldlen = chat->shared_state.password_length;
+    /* Must be cleared using crypto_memzero, don't want cryptographic material on the stack */
+    uint8_t old_passkey[GC_PASSKEY_SIZE];
+    memcpy(old_passkey, chat->shared_state.passkey, GC_PASSKEY_SIZE);
 
-    if (oldlen > 0) {
-        oldpasswd = (uint8_t *)malloc(oldlen);
-
-        if (oldpasswd == nullptr) {
-            return -4;
-        }
-
-        memcpy(oldpasswd, chat->shared_state.password, oldlen);
-    }
+    const bool had_passkey = chat->shared_state.has_passkey;
 
     if (!set_gc_password_local(chat, password, password_length)) {
-        free(oldpasswd);
+        crypto_memzero(old_passkey, GC_PASSKEY_SIZE);
         return -2;
     }
 
     if (!sign_gc_shared_state(chat)) {
-        set_gc_password_local(chat, oldpasswd, oldlen);
-        free(oldpasswd);
+        /* Reset to original state */
+        memcpy(&chat->shared_state, old_passkey, GC_PASSKEY_SIZE);
+        chat->shared_state.has_passkey = had_passkey;
+        crypto_memzero(old_passkey, GC_PASSKEY_SIZE);
         return -2;
     }
 
-    free(oldpasswd);
+    crypto_memzero(old_passkey, GC_PASSKEY_SIZE);
 
     if (!broadcast_gc_shared_state(chat)) {
         return -3;
@@ -7964,7 +7986,7 @@ static void group_cleanup(GC_Session *c, GC_Chat *chat)
 
     crypto_memunlock(chat->self_secret_key, sizeof(chat->self_secret_key));
     crypto_memunlock(chat->chat_secret_key, sizeof(chat->chat_secret_key));
-    crypto_memunlock(chat->shared_state.password, sizeof(chat->shared_state.password));
+    crypto_memunlock(chat->shared_state.passkey, sizeof(chat->shared_state.passkey));
 }
 
 /** Deletes chat from group chat array and cleans up. */
