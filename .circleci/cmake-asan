@@ -24,7 +24,8 @@ cmake -B_build -H. -GNinja \
   -DUSE_IPV6=OFF \
   -DAUTOTEST=ON \
   -DBUILD_MISC_TESTS=ON \
-  -DBUILD_FUN_UTILS=ON
+  -DBUILD_FUN_UTILS=ON \
+  -DUSE_TEST_NETWORK=ON
 
 cd _build
 
