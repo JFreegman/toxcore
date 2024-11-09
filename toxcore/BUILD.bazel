@@ -301,6 +301,16 @@ cc_library(
 )
 
 cc_library(
+    name = "net_profile",
+    srcs = ["net_profile.c"],
+    hdrs = ["net_profile.h"],
+    deps = [
+        ":attributes",
+        ":ccompat",
+    ],
+)
+
+cc_library(
     name = "network",
     srcs = ["network.c"],
     hdrs = ["network.h"],
@@ -319,6 +329,7 @@ cc_library(
         ":logger",
         ":mem",
         ":mono_time",
+        ":net_profile",
         ":util",
         "@libsodium",
         "@psocket",
@@ -571,6 +582,7 @@ cc_library(
         ":crypto_core",
         ":logger",
         ":mem",
+        ":net_profile",
         ":network",
     ],
 )
@@ -598,6 +610,7 @@ cc_library(
         ":logger",
         ":mem",
         ":mono_time",
+        ":net_profile",
         ":network",
         ":onion",
         ":util",
@@ -619,6 +632,7 @@ cc_library(
         ":logger",
         ":mem",
         ":mono_time",
+        ":net_profile",
         ":network",
         ":util",
     ],
@@ -641,6 +655,7 @@ cc_library(
         ":logger",
         ":mem",
         ":mono_time",
+        ":net_profile",
         ":network",
         ":onion",
         ":util",
@@ -678,6 +693,7 @@ cc_library(
         ":logger",
         ":mem",
         ":mono_time",
+        ":net_profile",
         ":network",
         ":util",
         "@pthread",
@@ -997,6 +1013,7 @@ cc_library(
         ":DHT",
         ":Messenger",
         ":TCP_client",
+        ":TCP_server",
         ":attributes",
         ":ccompat",
         ":crypto_core",
@@ -1007,6 +1024,7 @@ cc_library(
         ":mem",
         ":mono_time",
         ":net_crypto",
+        ":net_profile",
         ":network",
         ":onion_client",
         ":state",
