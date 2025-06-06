@@ -2296,6 +2296,8 @@ static int handle_gc_invite_request(GC_Chat *chat, uint32_t peer_number, const u
         if (!validate_password(chat, password, password_length)) {
             goto FAILED_INVITE;
         }
+
+        gconn->password_verified = true;
     }
 
     if (!send_gc_invite_response(chat, gconn)) {
@@ -2663,6 +2665,13 @@ static bool send_self_to_peer(const GC_Chat *chat, GC_Connection *gconn)
     uint16_t length = 0;
 
     if (chat_is_password_protected(chat)) {
+        if (!gconn->password_verified) {
+            mem_delete(chat->mem, self);
+            mem_delete(chat->mem, data);
+            LOGGER_WARNING(chat->log, "Unverified peer attempted peer info exchange.");
+            return false;
+        }
+
         net_pack_u16(data, chat->shared_state.password_length);
         length += sizeof(uint16_t);
 
@@ -2788,6 +2797,8 @@ static int handle_gc_peer_info_response(const GC_Session *c, GC_Chat *chat, uint
         }
 
         unpacked_len += MAX_GC_PASSWORD_SIZE;
+
+        gconn->password_verified = true;
     }
 
     if (length <= unpacked_len) {

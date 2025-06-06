@@ -135,6 +135,7 @@ typedef struct GC_Connection {
     uint8_t     pending_handshake_type;
     bool        is_pending_handshake_response;
     bool        is_oob_handshake;
+    bool        password_verified;  /* set to true when we verify that the peer knows the password */
 
     uint64_t    last_key_rotation;  /* the last time we rotated session keys for this peer */
     bool        pending_key_rotation_request;
